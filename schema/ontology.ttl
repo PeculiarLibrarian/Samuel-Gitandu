@@ -1,0 +1,17 @@
+@prefix ex: <http://padi.u/schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# The Class for any Opportunity found by your Scout
+ex:ScoutedOpportunity rdf:type owl:Class .
+
+# The 1003 Rule Property: Confidence must be exactly 1.0 (Deterministic)
+ex:hasConfidence rdf:type owl:DatatypeProperty ;
+    owl:domain ex:ScoutedOpportunity ;
+    owl:range xsd:decimal .
+
+# The '3' in 1003: Must have three independent validation sources
+ex:hasSource rdf:type owl:DatatypeProperty ;
+    owl:domain ex:ScoutedOpportunity ;
+    owl:range xsd:string .
