@@ -1,53 +1,57 @@
-# PADI Bureau: Nairobi Node-01 🇰🇪
-### Deterministic Inbound Intelligence & Governance Bureau
+# 🏛️ PADI BUREAU — NAIROBI NODE-01
 
-> "From Probabilistic Noise to Deterministic Truth."
+## 📡 Overview
+The **PADI (Peculiar AI Deterministic Infrastructure) Bureau** is a high-fidelity semantic engine designed for **Base L2 signal auditing**.  
+It functions as a "Logic Gate," converting raw mempool and on-chain signals into RDF and enforcing the **1003 Rule** via SHACL.
 
-The **PADI Bureau** is a neuro-symbolic governance layer designed to eliminate AI hallucination in high-stakes financial and robotic auditing. By integrating **Library Science (RDF/SHACL)** with **Agentic Scouting**, we enforce the **1003 Cardinality Rule** to ensure every "fact" in the PADI Ledger is verifiable, immutable, and bankable.
-
----
-
-## 🛡️ The 1003 Cardinality Rule
-To protect our users from stochastic noise, the Bureau enforces a strict semantic firewall:
-* **1 Trigger:** A single, verified event in the mempool or physical world.
-* **0 Conflict:** Zero detection of front-running or state inconsistency.
-* **0 Logic Gaps:** Complete contract/sensor validation before execution.
-* **3 Sources:** Triple-independent oracle confirmation for every data point.
+The Bureau ensures that no action is taken until a signal is promoted from a **probabilistic hypothesis** to a **Deterministic Executable Fact**.
 
 ---
 
-## 🏛️ Core Architecture (The Seven Pillars)
-This repository contains the **Minimum Viable Logic (MVL)** of the Bureau:
+## ⚖️ The 1003 Rule Standard
+Every signal processed by this node must satisfy the following constraints:
 
-1. **The Lexicon (`schema/ontology.ttl`):** The OWL 2 definitions of Truth.
-2. **The Sentinel (`schema/shapes.ttl`):** SHACL-validated Semantic Firewalls.
-3. **The Weaver (`bureau_core.py`):** The engine mapping raw signals into RDF Triples.
-4. **The Validator:** Our deterministic gatekeeper for the 1003 Rule.
+* **1**: **Confidence** must be exactly `1.0` (decimal, single instance enforced by SHACL).  
+* **3**: **Verification Sources** must be exactly 3 independent points (`hasVerificationSource`).  
+* **0 Conflict / 0 Latency**: Signal is fully target-aware (`hasTargetAddress`) and block-synced (`atBlockNumber`).
 
 ---
 
-## 🚀 Getting Started (Free & Deterministic)
+## 🛠️ System Architecture
 
-### 1. Requirements
-Install the librarian's toolkit:
-\`\`\`bash
+| Component | File | Role |
+| :--- | :--- | :--- |
+| **The Law** | `schema/ontology.ttl` | Defines core classes, properties, and OWL functional constraints. |
+| **The Sentinel** | `schema/shapes.ttl` | SHACL enforcement of the 1003 Rule and infrastructure context. |
+| **The Brain** | `bureau_core.py` | Python engine that audits signals and promotes valid ones to `ExecutableFact`. |
+| **The Environment** | `requirements.txt` | Pinned production dependencies for semantic engine, blockchain, and utilities. |
+
+---
+
+## 🔄 Validation Lifecycle
+
+1. **Ingestion:** Raw data is wrapped as `ex:FinancialSignal`.  
+2. **Audit:** `pyshacl` validates the RDF graph against `shape.ttl`.  
+3. **Promotion:**  
+   * **FAIL:** Signal is blocked as `❌ PROBABILISTIC`.  
+   * **PASS:** Signal is upgraded to `ex:ExecutableFact` and marked `isValidated = True`.  
+4. **Context Enrichment (optional but recommended):**  
+   * `observedAt` – timestamp of observation  
+   * `atBlockNumber` – blockchain block number  
+   * `hasGasPriceGwei` – gas price at observation  
+   * `isValidated` – boolean flag for SHACL compliance  
+
+---
+
+## 🚀 Installation & Setup
+
+### 1. Environment Preparation
+Ensure Python 3.10+ is installed. Use a virtual environment to maintain stable dependencies.
+
+```bash
+python -m venv padi_env
+source padi_env/bin/activate  # Linux/macOS
+# OR
+padi_env\Scripts\activate     # Windows
+
 pip install -r requirements.txt
-\`\`\`
-
-### 2. Run the Audit
-Execute the core engine to see the Semantic Firewall in action:
-\`\`\`bash
-python3 bureau_core.py
-\`\`\`
-
----
-
-## 🌍 Vision: The Inbound Intelligence Hub
-The PADI Bureau is building toward a global network of **Sovereign Nodes** that provide:
-* **Real-time Auditing** for Munich FinTech regulations.
-* **Autonomous Safety** for Base Robotics tracks.
-* **Trustworthy Data Provenance** for the Gitandu Family and beyond.
-
----
-
-**Built with Precision in Nairobi. Governed by Logic. Anchored in Truth.**
