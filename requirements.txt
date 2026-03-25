@@ -1,21 +1,21 @@
-# =====================================================
-# PADI BUREAU PRODUCTION REQUIREMENTS
-# Fully aligned with ontology.ttl & shape.ttl
-# =====================================================
+# PADI Sovereign Bureau - Production Dependencies
 
-# --- CORE SEMANTIC ENGINE ---
-# RDF graph creation and SHACL validation
-rdflib>=6.2.0,<7.0.0        # Stable proven floor, compatible with bureau_core.py
-pyshacl>=0.20.0,<0.21.0     # Ensures 1003 Rule enforcement for shape.ttl
+# Core
+python-dotenv==1.0.1
+aiohttp==3.9.3
+asyncio==3.4.3
 
-# --- BLOCKCHAIN INFRASTRUCTURE (BASE L2 / Weaver) ---
-web3>=6.0.0,<6.2.0           # Required for mempool/on-chain signals
+# RDF/Ontology
+rdflib==7.0.0
+owlrl==6.4.0
 
-# --- SECURITY & CONFIGURATION ---
-python-dotenv>=1.0.0,<1.1.0  # Environment variables for RPC endpoints / keys
-isodate>=0.6.1,<0.7.0        # Optional, robust ISO 8601 timestamp parsing
+# Data Validation
+pydantic==2.6.1
+pydantic-settings==2.1.0
 
-# --- OPTIONAL: TESTING & BATCH PROCESSING ---
-pytest>=7.0.0,<8.0.0         # Unit tests for deterministic/probabilistic signal validation
-tqdm>=4.0.0,<5.0.0           # Progress bars for batch signal generation
-pandas>=2.0.0,<3.0.0         # Optional data management for large signal sets
+# Utilities
+python-dateutil==2.9.0
+
+# Testing
+pytest==8.0.0
+pytest-asyncio==0.23.4
