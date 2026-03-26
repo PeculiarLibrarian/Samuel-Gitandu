@@ -314,7 +314,7 @@ class Executor:
                     target=fact['target'],
                     action_type=fact['action'],
                     signal_id=fact['signal_id'],
-                    network_type=network_type，
+                    network_type=network_type,  # ✅ FIXED: ASCII COMMA
                     chain_id=chain_id,
                     gas_price=gas_price
                 )
