@@ -1,0 +1,24 @@
+# =====================================================
+# PADI EXECUTOR v5.3 — Dependencies
+# =====================================================
+
+# Core Web3
+web3>=6.0.0
+
+# RDF Processing
+rdflib>=7.0.0
+
+# Type Hints (Python < 3.9)
+typing-extensions>=4.0.0
+
+# Logging Enhancements
+colorlog>=6.0.0
+
+# JSON Serialization
+orjson>=3.9.0
+
+# Optional: Async Support
+aiohttp>=3.9.0
+
+# Optional: Environment Variable Management
+python-dotenv>=1.0.0
