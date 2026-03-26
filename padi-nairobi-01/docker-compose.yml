@@ -1,0 +1,310 @@
+# =====================================================
+# PADI EXECUTOR v5.3 — Docker Compose Configuration
+# =====================================================
+# 
+# This orchestration file manages the entire monitoring stack:
+# - PADI Executor (Core execution engine)
+# - Metrics Exporter (Prometheus metrics exposure)
+# - Prometheus (Metrics collection)
+# - Grafana (Visualization dashboard)
+# - Alertmanager (Alert routing)
+# - Node Exporter (System metrics)
+# - cAdvisor (Container metrics)
+#
+# Usage:
+#   docker-compose up -d
+#   docker-compose down
+#   docker-compose logs -f [service]
+#
+# Version: 5.3
+# Node: Nairobi-01
+# Timestamp: 2026-03-26 [EAT]
+
+version: '3.8'
+
+# =====================================================
+# Networks
+# =====================================================
+networks:
+  padi_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# =====================================================
+# Volumes
+# =====================================================
+volumes:
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  alertmanager_data:
+    driver: local
+
+# =====================================================
+# Services
+# =====================================================
+services:
+  # =====================================================
+  # PADI Executor (Core Execution Engine)
+  # =====================================================
+  padi_executor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: padi_executor_nairobi_01
+    restart: unless-stopped
+    networks:
+      padi_network:
+        ipv4_address: 172.28.0.10
+    environment:
+      # Load environment variables from .env file
+      - PADI_NODE_ID=Nairobi-01
+      - PADI_SIMULATION_MODE=${PADI_SIMULATION_MODE:-true}
+      - PADI_LOG_LEVEL=${PADI_LOG_LEVEL:-INFO}
+    volumes:
+      # Mount configuration
+      - ./.env:/app/.env:ro
+      # Mount logs directory
+      - ./logs:/app/logs
+      # Mount persist directory
+      - ./persist:/app/persist
+      # Mount exports directories
+      - ./logs/json_exports:/app/logs/json_exports
+      - ./logs/rdf_exports:/app/logs/rdf_exports
+      - ./logs/csv_exports:/app/logs/csv_exports
+    ports:
+      # No ports exposed (internal service)
+    healthcheck:
+      test: ["CMD", "python", "-c", "from executor import Executor; Executor(simulation_mode=True).health_check()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      - prometheus
+    command: ['python', 'executor.py']
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # =====================================================
+  # PADI Metrics Exporter
+  # =====================================================
+  padi_metrics_exporter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: padi_metrics_exporter_nairobi_01
+    restart: unless-stopped
+    networks:
+      padi_network:
+        ipv4_address: 172.28.0.11
+    environment:
+      - PADI_NODE_ID=Nairobi-01
+    volumes:
+      - ./.env:/app/.env:ro
+      - ./logs:/app/logs
+      - ./persist:/app/persist
+    ports:
+      - "8000:8000"  # Prometheus metrics endpoint
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    depends_on:
+      - padi_executor
+    command: ['python', 'metrics_exporter.py']
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # =====================================================
+  # Prometheus (Metrics Collection)
+  # =====================================================
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: padi_prometheus_nairobi_01
+    restart: unless-stopped
+    networks:
+      padi_network:
+        ipv4_address: 172.28.0.20
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - ./alertmanager_config.yml:/etc/prometheus/alertmanager_config.yml:ro
+      - ./alerts:/prometheus/alerts
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"  # Prometheus Web UI
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      - padi_metrics_exporter
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # =====================================================
+  # Grafana (Visualization Dashboard)
+  # =====================================================
+  grafana:
+    image: grafana/grafana:10.2.4
+    container_name: padi_grafana_nairobi_01
+    restart: unless-stopped
+    networks:
+      padi_network:
+        ipv4_address: 172.28.0.30
+    environment:
+      # Grafana security
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-changeme}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      
+      # Grafana provisioning
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_SERVER serve_from_sub_path=true
+      
+      # Anonymous access (optional)
+      - GF_SECURITY_ANONYMOUS_ENABLED=false
+      
+      # Session settings
+      - GF_SESSION_PROVIDER=memory
+      - GF_SESSION_PROVIDER_CONFIG=persistence_sessions
+      
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"  # Grafana Web UI
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      - prometheus
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # =====================================================
+  # Alertmanager (Alert Routing)
+  # =====================================================
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: padi_alertmanager_nairobi_01
+    restart: unless-stopped
+    networks:
+      padi_network:
+        ipv4_address: 172.28.0.40
+    volumes:
+      - ./alertmanager_config.yml:/etc/alertmanager/config.yml:ro
+      - ./alertmanager_templates:/etc/alertmanager/templates:ro
+      - alertmanager_data:/alertmanager
+    ports:
+      - "9093:9093"  # Alertmanager Web UI
+    command:
+      - '--config.file=/etc/alertmanager/config.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093'
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      - prometheus
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # =====================================================
+  # Node Exporter (System Metrics)
+  # =====================================================
+  node_exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: padi_node_exporter_nairobi_01
+    restart: unless-stopped
+    networks:
+      padi_network:
+        ipv4_address: 172.28.0.50
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - "9100:9100"  # Node Exporter metrics
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9100/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # =====================================================
+  # cAdvisor (Container Metrics)
+  # =====================================================
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    container_name: padi_cadvisor_nairobi_01
+    restart: unless-stopped
+    networks:
+      padi_network:
+        ipv4_address: 172.28.0.60
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    ports:
+      - "8080:8080"  # cAdvisor Web UI
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      - prometheus
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
