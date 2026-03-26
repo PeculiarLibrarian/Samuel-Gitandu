@@ -1,133 +1,41 @@
-# =====================================================
-# 🏛️ PADI SOVEREIGN BUREAU — NAIROBI NODE-01
-# Production Dependencies
-# Version: 5.2
-# DOI Anchor: 10.5281/zenodo.18894084
-# 
-# V5.2 OPTIMIZATIONS:
-# - ✅ Web3.py for blockchain interactions
-# - ✅ Enhanced async processing support
-# - ✅ RDF/ontology tooling
-# - ✅ Multi-network RPC support
-# - ✅ Data validation framework
-# - ✅ Testing frameworks
-# - ✅ Utility libraries
-# =====================================================
+# PADI SOVEREIGN BUREAU — NAIROBI NODE-01
+# Version: 5.2 | DOI: 10.5281/zenodo.18894084
 
-# =====================================================
-# CORE DEPENDENCIES
-# =====================================================
-
-# Environment configuration
+# --- Infrastructure & Async ---
 python-dotenv==1.0.1
-
-# Async I/O
 aiohttp==3.9.3
 aiofiles==23.2.1
-
-# =====================================================
-# 🛡️ WEB3 & BLOCKCHAIN (V5.2 CRITICAL)
-# =====================================================
-
-# Web3.py - Ethereum Python library
-web3==6.11.3
-
-# eth-utils - Ethereum utility functions
-eth-utils==2.3.0
-
-# eth-hash - Ethereum hashing algorithms
-eth-hash[pycryptodome]==0.5.1
-
-# eth-abi - Ethereum ABI encoding/decoding
-eth-abi==4.3.0
-
-# eth-account - Ethereum accounts
-eth-account==0.10.0
-
-# =====================================================
-# RDF/ONTOLOGY & SEMANTIC WEB
-# =====================================================
-
-# RDFLib - RDF library for Python
-rdflib==7.0.0
-
-# OWL Reasoner - OWL 2 RL reasoning
-owlrl==6.4.0
-
-# SHACL Validator - SHACL shape validation (v5.2)
-pySHACL==0.20.0
-
-# JSON-LD - JSON-LD context processing (v5.2 JSON-LD export)
-pyld==2.0.4
-
-# =====================================================
-# DATA VALIDATION & SETTINGS
-# =====================================================
-
-# Pydantic - Data validation using Python type annotations
-pydantic==2.6.1
-
-# Pydantic Settings - Settings management
-pydantic-settings==2.1.0
-
-# =====================================================
-# NETWORK & RPC
-# =====================================================
-
-# HTTP client for RPC calls
 httpx==0.26.0
-
-# WebSocket client for real-time data
 websockets==12.0
 
-# =====================================================
-# UTILITIES
-# =====================================================
+# --- Blockchain & Web3 ---
+web3==6.11.3
+eth-utils==2.3.0
+eth-hash[pycryptodome]==0.5.1
+eth-abi==4.3.0
+eth-account==0.10.0
 
-# Date/time parsing
-python-dateutil==2.9.0
+# --- Semantic Web & Ontology ---
+rdflib==7.0.0
+owlrl==6.4.0
+pySHACL==0.20.0
+pyld==2.0.4
 
-# JSON Schema validation
+# --- Validation & Logic ---
+pydantic==2.6.1
+pydantic-settings==2.1.0
 jsonschema==4.20.0
 
-# =====================================================
-# LOGGING & MONITORING
-# =====================================================
-
-# Colored terminal output
+# --- Logging & UX ---
 colorlog==6.8.0
-
-# Progress bars
 tqdm==4.66.1
+python-dateutil==2.9.0
 
-# =====================================================
-# TESTING FRAMEWORKS
-# =====================================================
-
-# pytest - Testing framework
+# --- Testing & Quality (Dev Only) ---
 pytest==8.0.0
-
-# pytest-asyncio - Async testing support
 pytest-asyncio==0.23.4
-
-# pytest-cov - Coverage reporting
 pytest-cov==4.1.0
-
-# pytest-mock - Mocking utilities
 pytest-mock==3.12.0
-
-# =====================================================
-# DEVELOPMENT TOOLS (OPTIONAL)
-# =====================================================
-
-# Formatting
 black==24.1.1
-
-# Linting
 flake8==7.0.0
-
-# Type checking
 mypy==1.8.0
-
-# Pre-commit hooks
-pre-commit==3.6.0
