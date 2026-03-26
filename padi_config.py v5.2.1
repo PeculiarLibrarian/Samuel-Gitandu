@@ -6,10 +6,11 @@ import sys
 import json
 import logging
 import threading
+import asyncio
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, Union
 from decimal import Decimal
-from web3 import Web3
+from web3 import Web3, AsyncWeb3
 from rdflib import Graph
 from datetime import datetime
 from enum import Enum
@@ -26,6 +27,7 @@ from enum import Enum
 # - ✅ Type-safety for Enum validation (Deterministic Data Structures)
 # - ✅ JSON-LD export for machine-readable state
 # - ✅ Enhanced path validation for containerized environments
+# - ✅ AsyncWeb3 provider instantiation (aio stack optimization)
 # 
 # V5.1 LEGACY FEATURES (Maintained):
 # - ✅ Schema Bootstrapping Configuration
@@ -86,6 +88,7 @@ class PadiConfig:
     - Fail-fast mechanism enforcement for Sovereign compliance
     - Type-safety for Enum validation ensuring Deterministic Data Structures
     - JSON-LD export for machine-readable state broadcast
+    - 🛡️ v5.2.1: AsyncWeb3 provider instantiation for aio stack optimization
     
     V5.1 Features:
     - Schema Bootstrapping Configuration
@@ -102,7 +105,7 @@ class PadiConfig:
     - Thread-safe access
     - Backward compatibility with v4.0 API
     
-    Version: 5.2
+    Version: 5.2.1
     Replaces: data_ingestion/config.py v4.0
     """
 
@@ -158,6 +161,11 @@ class PadiConfig:
         # Initialize configurations
         self._init_wallet_config()
         self._init_network_configs()
+        
+        # 🛡️ v5.2.1 NEW: Initialize AsyncWeb3 providers for aio stack optimization
+        self._async_providers: Dict[str, AsyncWeb3] = {}
+        self._init_async_network_configs()
+        
         self._init_system_config()
         self._init_audit_config()
         self._init_execution_config()
@@ -233,7 +241,7 @@ class PadiConfig:
         - Schema directory configuration
         - Auto-generation toggle
         - Fail-fast mode (🛡️ v5.2: Now enforces Sovereign compliance)
-        - SHAML and ontology paths
+        - SHACL and ontology paths
         - CWD-independent path resolution
         """
         # 🛡️ v5.2 NEW: Anchor to project root (where this file lives)
@@ -248,7 +256,7 @@ class PadiConfig:
         require_all_files = os.getenv("PADI_REQUIRE_ALL_SCHEMA_FILES", "false").lower()
         require_all_files = require_all_files == "true"
         
-        # 🛡️ v5.2 NEW: SHAML shapes path with BASE_DIR anchoring
+        # 🛡️ v5.2 NEW: SHACL shapes path with BASE_DIR anchoring
         shapes_path = os.getenv("PADI_SHAPES_PATH", str(BASE_DIR / "schema" / "shapes.ttl"))
         
         # 🛡️ v5.2 NEW: Ontology path with BASE_DIR anchoring
@@ -444,6 +452,44 @@ class PadiConfig:
         
         self._logger.info(f"✅ Network configurations initialized: {len(active_networks)} active networks")
 
+    # =====================================================
+    # 🛡️ v5.2.1 NEW: ASYNCWEB3 PROVIDER INITIALIZATION
+    # =====================================================
+
+    def _init_async_network_configs(self):
+        """
+        Initialize AsyncWeb3 providers for all configured networks.
+        
+        🛡️ v5.2.1: Enables aio stack optimization for RPC operations.
+        Each configured network receives an AsyncWeb3 instance that can
+        be used for concurrent blockchain queries and transactions.
+        
+        Note: AsyncWeb3 instances are created but connections are lazy-loaded
+        on first use to avoid blocking initialization.
+        """
+        for network_name, config in self._networks.items():
+            if config["rpc_url"]:
+                try:
+                    # Create AsyncHTTPProvider for the network
+                    async_provider = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(config["rpc_url"]))
+                    self._async_providers[network_name] = async_provider
+                    self._logger.debug(
+                        f"✅ AsyncWeb3 provider initialized for {config['name']} ({network_name})"
+                    )
+                except Exception as e:
+                    self._logger.warning(
+                        f"⚠️ Failed to initialize AsyncWeb3 provider for {network_name}: {e}"
+                    )
+        
+        if self._async_providers:
+            self._logger.info(
+                f"✅ AsyncWeb3 providers initialized: {len(self._async_providers)} providers ready"
+            )
+        else:
+            self._logger.warning(
+                "⚠️ No AsyncWeb3 providers initialized (no configured RPC URLs)"
+            )
+
     def _init_system_config(self):
         """Initialize system configuration (v4.0 compatibility)."""
         # Support both PADI_NODE_ID and NODE_ID for backward compatibility
@@ -455,7 +501,7 @@ class PadiConfig:
             "environment": os.getenv("ENVIRONMENT", "production"),
             "doi_anchor": "10.5281/zenodo.18894084",
             "protocol_version": "PADI v3.0",
-            "config_version": "5.2",  # 🛡️ v5.2 updated
+            "config_version": "5.2.1",  # 🛡️ v5.2.1 updated
             "timezone": os.getenv("TZ", "Africa/Nairobi")
         }
         
@@ -546,7 +592,7 @@ class PadiConfig:
         """Log initialization summary."""
         self._logger.info("")
         self._logger.info("=" * 70)
-        self._logger.info("🏛️ PADI SOVEREIGN CONFIGURATION CONTROLLER v5.2")
+        self._logger.info("🏛️ PADI SOVEREIGN CONFIGURATION CONTROLLER v5.2.1")
         self._logger.info("=" * 70)
         self._logger.info(f"Node ID: {self._system['node_id']}")
         self._logger.info(f"Protocol Version: {self._system['protocol_version']}")
@@ -556,7 +602,7 @@ class PadiConfig:
         self._logger.info("")
         self._logger.info("🛡️ Schema Bootstrapping Configuration (v5.2):")
         self._logger.info(f"  Schema Directory: {self._schema_config['schema_dir']}")
-        self._logger.info(f"  SHAML Shapes Path: {self._schema_config['shapes_path']}")
+        self._logger.info(f"  SHACL Shapes Path: {self._schema_config['shapes_path']}")
         self._logger.info(f"  Ontology Path: {self._schema_config['ontology_path']}")
         self._logger.info(f"  Auto-Generate: {self._schema_config['allow_auto_generate']}")
         self._logger.info(f"  Fail-Fast: {self._schema_config['require_all_files']}")
@@ -574,10 +620,15 @@ class PadiConfig:
         self._logger.info(f"Validation Rules (1003 Rule):")
         self._logger.info(f"  Required Confidence: {self._validation['required_confidence']}")
         self._logger.info(f"  Required Verification Sources: {self._validation['required_verification_sources']}")
+        self._logger.info("")
+        self._logger.info(f"🛡️ AsyncWeb3 Providers (v5.2.1):")
+        self._logger.info(f"  Providers Active: {len(self._async_providers)}")
+        for network_name in self._async_providers.keys():
+            self._logger.info(f"  - {network_name}")
         self._logger.info("=" * 70)
 
     # =====================================================
-    # PUBLIC API (v5.2 — Object-Oriented)
+    # PUBLIC API (v5.2.1 — Object-Oriented)
     # =====================================================
 
     @property
@@ -631,6 +682,126 @@ class PadiConfig:
             if config["chain_id"] == chain_id:
                 return network_name
         return None
+
+    # =====================================================
+    # 🛡️ v5.2.1 NEW: ASYNCWEB3 PROVIDER ACCESS API
+    # =====================================================
+
+    def get_async_provider(self, network_name: str) -> Optional[AsyncWeb3]:
+        """
+        Get AsyncWeb3 provider for a specific network.
+        
+        Args:
+            network_name: Name of the network (e.g., "op-mainnet", "eth-mainnet")
+        
+        Returns:
+            AsyncWeb3 instance or None if not found
+        
+        Raises:
+            ValueError: If network_name is invalid
+        """
+        # Validate network type
+        valid_network_types = {net_type.value for net_type in NetworkType}
+        if network_name not in valid_network_types:
+            raise ValueError(
+                f"Invalid network type: {network_name}. "
+                f"Must be one of {valid_network_types}"
+            )
+        
+        return self._async_providers.get(network_name)
+
+    async def connect_async_provider(self, network_name: str) -> bool:
+        """
+        Connect to an AsyncWeb3 provider (lazy connection).
+        
+        Args:
+            network_name: Name of the network
+        
+        Returns:
+            True if connection successful (or already connected), False otherwise
+        """
+        async_provider = self.get_async_provider(network_name)
+        
+        if not async_provider:
+            self._logger.warning(f"No AsyncWeb3 provider for {network_name}")
+            return False
+        
+        try:
+            # Trigger lazy connection by making a lightweight call
+            is_connected = await async_provider.is_connected()
+            if is_connected:
+                self._logger.info(f"✅ AsyncWeb3 provider connected: {network_name}")
+                return True
+            else:
+                self._logger.warning(f"⚠️ AsyncWeb3 provider not connected: {network_name}")
+                return False
+        except Exception as e:
+            self._logger.error(f"❌ Failed to connect AsyncWeb3 provider for {network_name}: {e}")
+            return False
+
+    async def get_async_chain_id(self, network_name: str) -> Optional[int]:
+        """
+        Get chain ID from AsyncWeb3 provider.
+        
+        Args:
+            network_name: Name of the network
+        
+        Returns:
+            Chain ID or None if failed
+        """
+        async_provider = self.get_async_provider(network_name)
+        
+        if not async_provider:
+            return None
+        
+        try:
+            chain_id = await async_provider.eth.chain_id
+            self._logger.debug(f"Async chain_id for {network_name}: {chain_id}")
+            return chain_id
+        except Exception as e:
+            self._logger.error(f"Failed to get async chain_id for {network_name}: {e}")
+            return None
+
+    async def get_async_balance(self, network_name: str, address: str) -> Optional[int]:
+        """
+        Get balance from AsyncWeb3 provider (in wei).
+        
+        Args:
+            network_name: Name of the network
+            address: Wallet address
+        
+        Returns:
+            Balance in wei (int) or None if failed
+        
+        Note: Returns raw wei value. Convert using eth-utils for precision.
+        """
+        from eth_utils import to_checksum_address
+        
+        async_provider = self.get_async_provider(network_name)
+        
+        if not async_provider:
+            return None
+        
+        try:
+            checksum_address = to_checksum_address(address)
+            balance_wei = await async_provider.eth.get_balance(checksum_address)
+            self._logger.debug(
+                f"Async balance for {address} on {network_name}: {balance_wei} wei"
+            )
+            return balance_wei
+        except Exception as e:
+            self._logger.error(f"Failed to get async balance for {network_name}: {e}")
+            return None
+
+    @property
+    def async_providers(self) -> Dict[str, AsyncWeb3]:
+        """
+        Get all AsyncWeb3 providers.
+        
+        Returns:
+            Dictionary mapping network names to AsyncWeb3 instances
+        """
+        return self._async_providers.copy()
 
     @property
     def wallet_address(self) -> Optional[str]:
@@ -744,10 +915,10 @@ class PadiConfig:
 
     def get_shapes_path(self) -> str:
         """
-        Get SHAML shapes file path.
+        Get SHACL shapes file path.
         
         Returns:
-            SHAML shapes file path string
+            SHACL shapes file path string
         """
         return self._schema_config["shapes_path"]
 
@@ -904,7 +1075,8 @@ class PadiConfig:
                     "@type": "padi:NetworkConfig",
                     "padi:networkType": network_type,
                     "padi:chainId": config["chain_id"],
-                    "padi:isActive": bool(config["rpc_url"])
+                    "padi:isActive": bool(config["rpc_url"]),
+                    "padi:hasAsyncProvider": network_type in self._async_providers
                 }
                 for network_type, config in self._networks.items()
             ],
@@ -956,7 +1128,12 @@ class PadiConfig:
                     "@value": self._execution["default_network_type"]
                 }
             },
-            "@id": f"urn:padi:node:{self.node_id}:{self._system['config_version']}"
+            "padi:asyncProviders": {
+                "@type": "padi:AsyncProviderConfig",
+                "padi:availableProviders": len(self._async_providers),
+                "padi:providerNetworks": list(self._async_providers.keys())
+            },
+            "**@id**": f"urn:padi:node:{self.node_id}:{self._system['config_version']}"
         }
         
         return json.dumps(data, indent=2)
@@ -1070,7 +1247,7 @@ class PadiConfig:
         Prints configuration to console.
         """
         print("=" * 70)
-        print("🏛️ PADI SOVEREIGN BUREAU — NODE CONFIGURATION v5.2")
+        print("🏛️ PADI SOVEREIGN BUREAU — NODE CONFIGURATION v5.2.1")
         print("=" * 70)
         print()
         print("Node Identification:")
@@ -1080,7 +1257,7 @@ class PadiConfig:
         print()
         print("🛡️ Schema Bootstrapping Configuration (v5.2):")
         print(f"  Schema Directory: {self.get_schema_dir()}")
-        print(f"  SHAML Shapes Path: {self.get_shapes_path()}")
+        print(f"  SHACL Shapes Path: {self.get_shapes_path()}")
         print(f"  Ontology Path: {self.get_ontology_path()}")
         print(f"  Auto-Generate: {self.is_schema_auto_generate_enabled()}")
         print(f"  Fail-Fast: {self.is_schema_fail_fast_enabled()}")
@@ -1095,10 +1272,18 @@ class PadiConfig:
         configured = self.get_configured_networks()
         if configured:
             for network, config in configured.items():
-                print(f"  ✅ {config['name']} (Chain ID: {config['chain_id']})")
+                async_status = "🔄 Async" if network in self._async_providers else "🔌 Sync"
+                print(f"  ✅ {config['name']} (Chain ID: {config['chain_id']}) {async_status}")
             print(f"  Default Network: {self.DEFAULT_NETWORK_TYPE}")
         else:
             print(f"  ❌ No networks configured")
+        print()
+        print("🛡️ AsyncWeb3 Providers (v5.2.1):")
+        if self._async_providers:
+            for network_name in self._async_providers.keys():
+                print(f"  ✅ {network_name}")
+        else:
+            print(f"  ⚠️  No AsyncWeb3 providers initialized")
         print()
         print("Validation Rules (1003 Rule):")
         print(f"  Required Confidence: {self.REQUIRED_CONFIDENCE}")
@@ -1244,6 +1429,7 @@ class PadiConfig:
             "networks": {
                 "total": len(self._networks),
                 "active": sum(1 for net in self._networks.values() if net.get("rpc_url")),
+                "async_providers_active": len(self._async_providers),
                 "configurations": {
                     name: {
                         "chain_id": net["chain_id"],
@@ -1251,7 +1437,8 @@ class PadiConfig:
                         "network_type": net["network_type"].value,
                         "rpc_configured": bool(net["rpc_url"]),
                         "backup_available": bool(net.get("rpc_backup")),
-                        "supports_l1_fee": net["supports_l1_fee"]
+                        "supports_l1_fee": net["supports_l1_fee"],
+                        "async_provider_enabled": name in self._async_providers
                     }
                     for name, net in self._networks.items()
                 }
@@ -1273,6 +1460,10 @@ class PadiConfig:
                     "auto_generate": self._schema_config["allow_auto_generate"],
                     "fail_fast": self._schema_config["require_all_files"]
                 }
+            },
+            "async_providers": {
+                "total": len(self._async_providers),
+                "networks": list(self._async_providers.keys())
             }
         }
 
@@ -1307,7 +1498,8 @@ class PadiConfig:
                     "network_type": net["network_type"].value,
                     "rpc_configured": bool(net["rpc_url"]),
                     "supports_l1_fee": net["supports_l1_fee"],
-                    "layer": net["layer"]
+                    "layer": net["layer"],
+                    "async_provider_enabled": name in self._async_providers
                 }
                 for name, net in self._networks.items()
             },
@@ -1328,6 +1520,10 @@ class PadiConfig:
                 "ontology_path": self._schema_config["ontology_path"],
                 "auto_generate": self._schema_config["allow_auto_generate"],
                 "fail_fast": self._schema_config["require_all_files"]
+            },
+            "async_providers": {
+                "active_count": len(self._async_providers),
+                "networks": list(self._async_providers.keys())
             }
         }
         
@@ -1339,7 +1535,7 @@ class PadiConfig:
 
 
 # =====================================================
-# MODULE-LEVEL ACCESS POINTS (v5.2 — Singleton Pattern)
+# MODULE-LEVEL ACCESS POINTS (v5.2.1 — Singleton Pattern)
 # =====================================================
 
 # Global configuration instance
@@ -1351,7 +1547,7 @@ def get_config() -> PadiConfig:
     """
     Get global PADI configuration instance.
     
-    v5.2 recommended access pattern:
+    v5.2.1 recommended access pattern:
         from padi_config import get_config
         config = get_config()
         print(config.node_id)
@@ -1388,7 +1584,6 @@ def initialize_config(
     
     Returns:
         Initialized PadiConfig instance
-    }
     """
     global _config
     
@@ -1414,7 +1609,7 @@ if __name__ == "__main__":
     # Validate configuration
     if config.validate():
         print("\n" + "=" * 70)
-        print("🏛️ PADI SOVEREIGN CONFIGURATION — DIAGNOSTICS v5.2")
+        print("🏛️ PADI SOVEREIGN CONFIGURATION — DIAGNOSTICS v5.2.1")
         print("=" * 70)
         
         # Display configuration (v4.0 compatibility)
@@ -1448,7 +1643,7 @@ if __name__ == "__main__":
         print(json_ld_output)
         
         # Save JSON-LD to file
-        json_ld_path = Path("logs") / f"node_config_{config.node_id}_v5.2.jsonld"
+        json_ld_path = Path("logs") / f"node_config_{config.node_id}_v5.2.1.jsonld"
         json_ld_path.parent.mkdir(exist_ok=True)
         with open(json_ld_path, 'w') as f:
             f.write(json_ld_output)
@@ -1461,5 +1656,23 @@ if __name__ == "__main__":
         diagnostics = config.get_diagnostics()
         print(json.dumps(diagnostics, indent=2, default=str))
         
-        print("\n✅ All diagnostics complete. PadiConfig v5.2 is operational.")
+        # 🛡️ v5.2.1 NEW: AsyncWeb3 provider test
+        print("\n" + "=" * 70)
+        print("AsyncWeb3 Provider Diagnostics (v5.2.1)")
+        print("=" * 70)
+        async def test_async_providers():
+            """Test AsyncWeb3 provider connectivity."""
+            for network_name in config.async_providers.keys():
+                connected = await config.connect_async_provider(network_name)
+                print(f"  {network_name}: {'✅ Connected' if connected else '❌ Failed'}")
+                
+                # Test chain ID retrieval
+                chain_id = await config.get_async_chain_id(network_name)
+                print(f"    Chain ID: {chain_id}")
+        
+        # Run async test
+        import asyncio
+        asyncio.run(test_async_providers())
+        
+        print("\n✅ All diagnostics complete. PadiConfig v5.2.1 is operational.")
         print("=" * 70)
