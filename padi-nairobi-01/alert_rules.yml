@@ -1,0 +1,198 @@
+# =====================================================
+# PADI EXECUTOR v5.3 — Alert Rules
+# =====================================================
+
+groups:
+  - name: padi_executor_alerts
+    interval: 30s
+    rules:
+      
+      # CRITICAL: System Down
+      - alert: ExecutorDown
+        expr: up{job="padi_executor"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: 'nairobi-ops'
+        annotations:
+          summary: "PADI Executor is down on Nairobi-01"
+          description: "PADI Executor has been down for more than 1 minute."
+
+      # CRITICAL: Transaction Failure Rate High
+      - alert: HighTransactionFailureRate
+        expr: |
+          rate(padi_exec_transactions_failed_total[5m]) / 
+          rate(padi_exec_transactions_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          team: 'nairobi-ops'
+        annotations:
+          summary: "Transaction failure rate exceeds 5%"
+          description: "Transaction failure rate is {{ $value | humanizePercentage }} over the last 5 minutes."
+
+      # CRITICAL: Circuit Breaker Open
+      - alert: CircuitBreakerOpen
+        expr: padi_exec_circuit_breaker_open{state="open"} == 1
+        for: 2m
+        labels:
+          severity: critical
+          team: 'nairobi-ops'
+        annotations:
+          summary: "Circuit breaker is open for {{ $labels.network }}"
+          description: "Circuit breaker has been open for more than 2 minutes. Network: {{ $labels.network }}"
+
+      # CRITICAL: Nonce Desynchronization
+      - alert: NonceDesyncDetected
+        expr: padi_exec_nonce_desync_total > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: 'nairobi-ops'
+        annotations:
+          summary: "Nonce desynchronization detected"
+          description: "Nonce cache has fallen out of sync with on-chain state."
+
+      # CRITICAL: Wallet Balance Low
+      - alert: WalletBalanceLow
+        expr: padi_exec_wallet_balance_eth < 0.01
+        for: 1m
+        labels:
+          severity: critical
+          team: 'nairobi-ops'
+        annotations:
+          summary: "Wallet balance critically low"
+          description: "Wallet balance is {{ $value }} ETH. Refund required."
+
+      # HIGH: Gas Price Spike
+      - alert: GasPriceSpike
+        expr: |
+          padi_exec_gas_price_gwei{network="optimism"} > 
+          avg_over_time(padi_exec_gas_price_gwei{network="optimism"}[5m]) * 2.5
+        for: 1m
+        labels:
+          severity: warning
+          team: 'nairobi-ops'
+        annotations:
+          summary: "Gas price spike detected on {{ $labels.network }}"
+          description: "Current gas price ({{ $value }} Gwei) is 2.5x above 5-minute average."
+
+      # HIGH: Pending Transactions Stuck
+      - alert: PendingTransactionsStuck
+        expr: padi_exec_pending_transactions > 10
+        for: 5m
+        labels:
+          severity: warning
+          team: 'nairobi-ops'
+        annotations:
+          summary: "High number of pending transactions"
+          description: "{{ $value }} transactions have been pending for more than 5 minutes."
+
+      # HIGH: Kill-Switch Rejection Spike
+      - alert: HighKillSwitchRejectionRate
+        expr: |
+          rate(padi_exec_kill_switch_rejected_total[5m]) > 
+          rate(padi_exec_executions_total[5m]) * 0.1
+        for: 5m
+        labels:
+          severity: warning
+          team: 'nairobi-ops'
+        annotations:
+          summary: "Kill-switch rejecting 10%+ of transactions"
+          description: "Kill-switch rejection rate is elevated. Review rules."
+
+      # MEDIUM: Network Connection Degraded
+      - alert: NetworkConnectionDegraded
+        expr: padi_exec_network_connected == 0
+        for: 30s
+        labels:
+          severity: warning
+          team: 'nairobi-ops'
+        annotations:
+          summary: "No networks connected"
+          description: "Executor has no active network connections."
+
+      # MEDIUM: Receipt Monitoring Delay
+      - alert: ReceiptMonitoringDelay
+        expr: padi_exec_receipt_monitor_lag_seconds > 300
+        for: 2m
+        labels:
+          severity: warning
+          team: 'nairobi-ops'
+        annotations:
+          summary: "Receipt monitoring lagging"
+          description: "Receipt tracking is lagging by {{ $value }} seconds."
+
+      # MEDIUM: Audit Log Size Large
+      - alert: AuditLogSizeLarge
+        expr: padi_exec_audit_log_size_bytes > 104857600
+        for: 10m
+        labels:
+          severity: info
+          team: 'nairobi-ops'
+        annotations:
+          summary: "Audit log exceeds 100MB"
+          description: "Audit log size is {{ $value | humanize }}. Consider export."
+
+      # INFO: Daily Summary
+      - alert: DailyOperationsSummary
+        expr: |
+          sum(increase(padi_exec_transactions_successful_total[24h])) by (network)
+        for: 1m
+        labels:
+          severity: info
+          team: 'nairobi-ops'
+        annotations:
+          summary: "Daily transaction summary for {{ $labels.network }}"
+          description: "{{ $value}} successful transactions in the last 24 hours."
+
+  - name: infrastructure_alerts
+    interval: 60s
+    rules:
+      
+      # CRITICAL: High CPU Usage
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          team: 'devops'
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value }}%."
+
+      # CRITICAL: High Memory Usage
+      - alert: HighMemoryUsage
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          team: 'devops'
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value }}%."
+
+      # HIGH: Disk Space Low
+      - alert: DiskSpaceLow
+        expr: |
+          100 - (node_filesystem_avail_bytes{mountpoint="/"} / 
+          node_filesystem_size_bytes{mountpoint="/"}) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          team: 'devops'
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Disk usage is {{ $value }}%."
+
+      # HIGH: Network Connection Errors
+      - alert: RPCConnectionErrors
+        expr: rate(padi_exec_rpc_errors_total[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          team: 'devops'
+        annotations:
+          summary: "High RPC connection error rate"
+          description: "RPC errors: {{ $value }}/s over last 5 minutes."
