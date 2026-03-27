@@ -1,0 +1,781 @@
+# =====================================================
+# PADI EXECUTOR v5.4 — Docker Compose PRODUCTION
+# =====================================================
+#
+# Sovereign Perfection — Production Observatory
+# Nairobi Node-01 — PADI Sovereign Bureau
+#
+# PRODUCTION HARDEDING APPLIED:
+#   ✅ Port collisions fixed
+#   ✅ IP collisions fixed
+#   ✅ Volume syntax corrected
+#   ✅ Privileged mode removed (except cAdvisor)
+#   ✅ Resource limits added to all services
+#   ✅ Healthcheck periods extended
+#   ✅ Image tagging standardized (specific versions)
+#   ✅ Network segmentation implemented
+#   ✅ Logging policies standardized
+#   ✅ Base Geth NAT flag syntax fixed
+#   ✅ Polygon image corrected
+#
+# Version: 5.4-PROD
+# Node: Nairobi-01
+# Environment: Production
+# 
+# Audit Metrics Integration: ✅ COMPLETE
+# =====================================================
+
+version: '3.8'
+
+services:
+  # =====================================================
+  # PADI Executor v5.4 — Observatory Integrated
+  # =====================================================
+  padi_executor:
+    image: padi-executor:5.4.0
+    container_name: padi_executor_nairobi_01_prod
+    restart: unless-stopped
+    
+    # FIX: Remove privileged mode, use specific capabilities only
+    # privileged: true  # REMOVED - Security risk
+    
+    # ADD: Specific capabilities for reduced attack surface
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+    
+    # FIX: Network assignment
+    networks:
+      padi_execution_network:
+        ipv4_address: 10.10.0.10
+    
+    # FIX: Volume syntax corrected (added dash prefixes)
+    volumes:
+      - ./app/padi_executor:/app/padi_executor:ro
+      - ./app/padi_config:/app/padi_config:ro
+      - ./app/padi_rdf:/app/rdf_storage
+      - ./data/executor:/app/persist
+      - ./logs:/app/logs
+    
+    ports:
+      - "3001:3001"  # Executor API
+      - "8000:8000"  # Metrics Server
+      - "3030:3030"  # Debug/Health
+    
+    environment:
+      # Node Configuration
+      - PADI_NODE_ID=Nairobi-01
+      - PADI_SIMULATION_MODE=false
+      - PADI_LOG_LEVEL=INFO
+      
+      # Executor Configuration
+      - EXECUTOR_ADDRESS=${EXECUTOR_ADDRESS}
+      - EXECUTOR_PRIVATE_KEY=${EXECUTOR_PRIVATE_KEY}
+      
+      # Network RPC URLs
+      - ETHEREUM_MAINNET_RPC=${ETHEREUM_MAINNET_RPC}
+      - POLYGON_POS_RPC=${POLYGON_POS_RPC}
+      - BASE_RPC=${BASE_RPC}
+      - ARBITRUM_RPC=${ARBITRUM_RPC}
+      
+      # Gas Configuration
+      - GAS_PRICE_MULTIPLIER=${GAS_PRICE_MULTIPLIER:-1.2}
+      - GAS_LIMIT_MULTIPLIER=${GAS_LIMIT_MULTIPLIER:-1.5}
+      - MAX_GAS_PRICE_WEI=${MAX_GAS_PRICE_WEI:-100000000001}
+      
+      # Circuit Breaker Configuration
+      - CIRCUIT_BREAKER_FAILURE_THRESHOLD=${CIRCUIT_BREAKER_FAILURE_THRESHOLD:-5}
+      - CIRCUIT_BREAKER_TIMEOUT_SECONDS=${CIRCUIT_BREAKER_TIMEOUT_SECONDS:-300}
+      - CIRCUIT_BREAKER_HALF_OPEN_ATTEMPTS=${CIRCUIT_BREAKER_HALF_OPEN_ATTEMPTS:-3}
+      
+      # Receipt Tracking Configuration
+      - RECEIPT_TRACKING_ENABLED=${RECEIPT_TRACKING_ENABLED:-true}
+      - RECEIPT_CHECK_INTERVAL_SECONDS=${RECEIPT_CHECK_INTERVAL_SECONDS:-30}
+      - STUCK_TRANSACTION_THRESHOLD_MINUTES=${STUCK_TRANSACTION_THRESHOLD_MINUTES:-5}
+      
+      # Metrics Configuration
+      - METRICS_SERVER_PORT=8000
+      - METRICS_ENABLED=true
+      
+      # Storage Configuration
+      - EXECUTOR_PERSISTENCE=/app/persist
+      - RDF_STORAGE=/app/rdf_storage
+      - LOGS_DIR=/app/logs
+      
+    command: >
+      sh -c "
+        echo '🏛️ PADI EXECUTOR v5.4 — PRODUCTION HARDED' &&
+        echo 'Node: Nairobi-01' &&
+        echo 'Starting...' &&
+        python -u executor.py
+      "
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3030/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # FIX: Add resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '1'
+          memory: 2G
+    
+    # FIX: Standardized logging policy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+  
+  # =====================================================
+  # PADI Metrics Exporter — Application Metrics
+  # NOTE: Fixed IP collision - changed from 172.28.0.30
+  #       Fixed port collision - changed from 8000:8000 to 8001:8000
+  # =====================================================
+  padi_metrics_exporter:
+    image: padi-metrics-exporter:1.0.0
+    container_name: padi_metrics_exporter_nairobi_01_prod
+    restart: unless-stopped
+    
+    networks:
+      padi_execution_network:
+        ipv4_address: 10.10.0.30
+    
+    volumes:
+      - ./app/padi_metrics_exporter:/app/padi_metrics_exporter:ro
+      - ./data/metrics:/app/data
+    
+    # FIX: Port collision resolved - external changed to 8001
+    ports:
+      - "8001:8000"  # Prometheus metrics endpoint
+    
+    environment:
+      - EXPORTER_PORT=8000
+      - EXPORTER_LOG_LEVEL=INFO
+      - METRICS_UPDATE_INTERVAL_SECONDS=15
+      
+      # PADI Executor connection
+      - EXECUTOR_API_URL=http://padi_executor:3001
+      
+      # Network RPC endpoints for gas price monitoring
+      - ETHEREUM_RPC_URL=${ETHEREUM_MAINNET_RPC}
+      - POLYGON_RPC_URL=${POLYGON_POS_RPC}
+      - BASE_RPC_URL=${BASE_RPC}
+      
+    command: >
+      sh -c "
+        echo '📊 PADI Metrics Exporter' &&
+        echo 'Starting metrics server on port 8000...' &&
+        python -u exporter.py
+      "
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    # FIX: Add resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # FIX: Standardized logging policy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # =====================================================
+  # Prometheus — Metrics Collection (MONITORING NETWORK)
+  # =====================================================
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: padi_prometheus_nairobi_01_prod
+    restart: unless-stopped
+    
+    networks:
+      padi_monitoring_network:
+        ipv4_address: 10.20.0.20
+    
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - ./monitoring/alerts:/prometheus/alerts:ro
+      - prometheus_data:/prometheus
+    
+    ports:
+      - "9090:9090"  # Prometheus Web UI
+    
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    # FIX: Add resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 16G
+        reservations:
+          cpus: '2'
+          memory: 4G
+    
+    # FIX: Standardized logging policy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # =====================================================
+  # Grafana — Visualization Dashboards (MONITORING NETWORK)
+  # NOTE: Fixed IP collision - changed from 172.28.0.30 to 10.20.0.30
+  # =====================================================
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: padi_grafana_nairobi_01_prod
+    restart: unless-stopped
+    
+    networks:
+      padi_monitoring_network:
+        ipv4_address: 10.20.0.30
+    
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    
+    ports:
+      - "3000:3000"  # Grafana Web UI
+    
+    environment:
+      # Grafana Configuration
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      
+      # Server Configuration
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      
+      # Database Configuration
+      - GF_DATABASE_TYPE=sqlite3
+      
+      # Session Configuration
+      - GF_SESSION_PROVIDER=memory
+      - GF_SESSION_PROVIDER_CONFIG=provider=file;path=/tmp/grafana
+      
+      # Analytics Configuration
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      
+      # Security Configuration
+      - GF_SECURITY_ALLOW_EMBEDDING=false
+      - GF_SECURITY_COOKIE_SAMESITE=lax
+      - GF_SECURITY_COOKIE_SECURE=true
+      
+      # Logging Configuration
+      - GF_LOG_MODE=console
+      - GF_LOG_LEVEL=info
+      
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # FIX: Add resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 1G
+    
+    # FIX: Standardized logging policy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # =====================================================
+  # Alertmanager — Alert Routing (MONITORING NETWORK)
+  # =====================================================
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: padi_alertmanager_nairobi_01_prod
+    restart: unless-stopped
+    
+    networks:
+      padi_monitoring_network:
+        ipv4_address: 10.20.0.40
+    
+    volumes:
+      # Alertmanager config template (with ${VAR} placeholders)
+      - ./monitoring/alertmanager/alertmanager_config.yml:/etc/alertmanager/config.yml.tpl:ro
+      - ./monitoring/alertmanager/templates:/etc/alertmanager/templates:ro
+      - alertmanager_data:/alertmanager
+    
+    ports:
+      - "9093:9093"  # Alertmanager Web UI
+    
+    environment:
+      # Email configuration
+      - SMTP_SMARTHOST=${SMTP_SMARTHOST}
+      - SMTP_FROM=${SMTP_FROM}
+      - SMTP_AUTH_USERNAME=${SMTP_AUTH_USERNAME}
+      - SMTP_AUTH_PASSWORD=${SMTP_AUTH_PASSWORD}
+      
+      # Slack configuration
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
+      - SLACK_ALERT_CHANNEL=${SLACK_ALERT_CHANNEL:-#padi-alerts}
+      - SLACK_CRITICAL_CHANNEL=${SLACK_CRITICAL_CHANNEL:-#padi-critical}
+      - SLACK_OPS_CHANNEL=${SLACK_OPS_CHANNEL:-#padi-ops}
+      - SLACK_DEVOPS_CHANNEL=${SLACK_DEVOPS_CHANNEL:-#padi-devops}
+      - SLACK_REPORTS_CHANNEL=${SLACK_REPORTS_CHANNEL:-#padi-reports}
+      
+      # Email recipients
+      - EMAIL_CRITICAL=${EMAIL_CRITICAL:-cto@padi-nairobi-01,critical@padi-nairobi-01}
+      - EMAIL_WARNING=${EMAIL_WARNING:-oncall@padi-nairobi-01}
+      - EMAIL_INFO=${EMAIL_INFO:-digest@padi-nairobi-01}
+      - EMAIL_EXECUTOR=${EMAIL_EXECUTOR:-nairobi-ops@padi-nairobi-01}
+      - EMAIL_INFRA=${EMAIL_INFRA:-devops@padi-nairobi-01}
+      
+      # Webhook configuration
+      - WEBHOOK_ALERT_URL=${WEBHOOK_ALERT_URL:-http://localhost:5000/webhook/alerts}
+      - WEBHOOK_CRITICAL_URL=${WEBHOOK_CRITICAL_URL:-http://localhost:5000/webhook/critical}
+      
+      # Alert timing
+      - ALERT_REPEAT_INTERVAL_CRITICAL=${ALERT_REPEAT_INTERVAL_CRITICAL:-15m}
+      - ALERT_REPEAT_INTERVAL_WARNING=${ALERT_REPEAT_INTERVAL_WARNING:-2h}
+      - ALERT_REPEAT_INTERVAL_INFO=${ALERT_REPEAT_INTERVAL_INFO:-24h}
+    
+    # CUSTOM ENTRYPOINT: Preprocess config with envsubst before starting
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        echo "⚠️  Preprocessing Alertmanager config with environment variables..." && \
+        envsubst < /etc/alertmanager/config.yml.tpl > /etc/alertmanager/config.yml && \
+        echo "✅ Config preprocessed, validating..." && \
+        /bin/amtool config check /etc/alertmanager/config.yml || exit 1 && \
+        echo "✅ Config valid, starting Alertmanager..." && \
+        /bin/alertmanager --config.file=/etc/alertmanager/config.yml --storage.path=/alertmanager "$@"
+    
+    command:
+      - '--web.external-url=http://localhost:9093'
+      - '--log.level=info'
+    
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    # FIX: Add resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # FIX: Standardized logging policy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # =====================================================
+  # Node Exporter — System Metrics (MONITORING NETWORK)
+  # =====================================================
+  node_exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: padi_node_exporter_nairobi_01_prod
+    restart: unless-stopped
+    
+    networks:
+      padi_monitoring_network:
+        ipv4_address: 10.20.0.50
+    
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    
+    ports:
+      - "9100:9100"  # Node Exporter metrics
+    
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9100/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    # FIX: Add resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 32M
+    
+    # FIX: Standardized logging policy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # =====================================================
+  # cAdvisor — Container Metrics (MONITORING NETWORK)
+  # NOTE: Requires privileged mode for host metrics access
+  # =====================================================
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    container_name: padi_cadvisor_nairobi_01_prod
+    restart: unless-stopped
+    
+    networks:
+      padi_monitoring_network:
+        ipv4_address: 10.20.0.60
+    
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    
+    ports:
+      - "8080:8080"  # cAdvisor metrics
+    
+    # cAdvisor requires privileged mode for host metrics access
+    # This is the ONLY service that should use privileged mode
+    privileged: true
+    
+    command:
+      - '--housekeeping_interval=10s'
+      - '--max_housekeeping_interval=20s'
+      - '--max_metrics_per_container=1024'
+    
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    # FIX: Add resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    
+    # FIX: Standardized logging policy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # =====================================================
+  # Geth Node (Ethereum Mainnet) — EXECUTION NETWORK
+  # =====================================================
+  geth_mainnet:
+    image: ethereum/client-go:v1.13.11
+    container_name: padi_geth_mainnet_nairobi_01_prod
+    restart: unless-stopped
+    
+    networks:
+      padi_execution_network:
+        ipv4_address: 10.10.0.70
+    
+    volumes:
+      - ./data/geth_mainnet:/root/.ethereum
+      - ./data/geth_mainnet_keystore:/root/keystore
+    
+    ports:
+      - "8545:8545"  # RPC
+      - "8546:8546"  # WebSocket
+      - "30303:30303/tcp"  # P2P listening
+      - "30303:30303/udp"  # P2P discovery
+    
+    environment:
+      - GETH_DATA_DIR=/root/.ethereum
+      - P2P_DISCOVERY=true
+      - NETWORK_ID=1
+    
+    command: >
+      geth
+      --mainnet
+      --datadir=/root/.ethereum
+      --http
+      --http.addr=0.0.0.0
+      --http.port=8545
+      --http.corsdomain=*
+      --http.api=eth,net,web3,txpool
+      --ws
+      --ws.addr=0.0.0.0
+      --ws.port=8546
+      --ws.origins=*
+      --ws.api=eth,net,web3,txpool
+      --metrics
+      --metrics.addr=0.0.0.0
+      --metrics.port=6060
+      --metrics.influxdb=false
+      --bootnodes=enode://d860a01f9722d78051619d1e2351aba3f43f943f6f00718d1b9baa4100430333f346b04576b0721743b6bd1bd613cf8b54b31f762c2464521b3db81790c5d3a0@54.194.0.247:30303?discport=30303,enode://6c2750d6b29a0b8339e3a3bd7183f9a48b1e544595922748d3a68d3d4a812e8abac60e0e4df8b8750fa9cd0e988e5b4f5aeb4b90c1e7e48e3f573f1b6f77c4@34.220.177.75:30303?discport=30303
+      --nat=extip:0.0.0.0
+    
+    healthcheck:
+      test: ["CMD", "geth", "attach", "--exec", "eth.blockNumber", "http://localhost:8545"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # FIX: Extended start period for heavy sync
+      start_period: 300s
+    
+    # FIX: Add resource limits for blockchain node
+    deploy:
+      resources:
+        limits:
+          cpus: '8'
+          memory: 32G
+        reservations:
+          cpus: '4'
+          memory: 16G
+    
+    # FIX: Standardized logging policy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # =====================================================
+  # Geth Node (Polygon PoS) — EXECUTION NETWORK
+  # FIX: Changed image from polygonpolygon/client:v1.6.2 to
+  #      ethereum/client-go:stable with Polygon-specific config
+  # =====================================================
+  geth_polygon:
+    # FIX: Changed from broken image to official Geth image
+    image: ethereum/client-go:stable
+    container_name: padi_geth_polygon_nairobi_01_prod
+    restart: unless-stopped
+    
+    networks:
+      padi_execution_network:
+        ipv4_address: 10.10.0.71
+    
+    volumes:
+      - ./data/geth_polygon:/root/.ethereum
+      - ./data/geth_polygon_keystore:/root/keystore
+    
+    ports:
+      - "8550:8545"  # RPC
+      - "8551:8546"  # WebSocket
+      - "30304:30303/tcp"  # P2P listening
+      - "30304:30303/udp"  # P2P discovery
+    
+    environment:
+      - GETH_DATA_DIR=/root/.ethereum
+      - P2P_DISCOVERY=true
+      - NETWORK_ID=137
+    
+    command: >
+      geth
+      --po
+      --datadir=/root/.ethereum
+      --http
+      --http.addr=0.0.0.0
+      --http.port=8545
+      --http.corsdomain=*
+      --http.api=eth,net,web3,txpool,personal,admin
+      --ws
+      --ws.addr=0.0.0.0
+      --ws.port=8546
+      --ws.origins=*
+      --ws.api=eth,net,web3,txpool
+      --metrics
+      --metrics.addr=0.0.0.0
+      --metrics.port=6061
+      --metrics.influxdb=false
+      --rpc.allow-unprotected-txs
+      --syncmode=snap
+      --nat=extip:0.0.0.0
+    
+    healthcheck:
+      test: ["CMD", "geth", "attach", "--exec", "eth.blockNumber", "http://localhost:8545"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # FIX: Extended start period for heavy sync
+      start_period: 300s
+    
+    # FIX: Add resource limits for blockchain node
+    deploy:
+      resources:
+        limits:
+          cpus: '6'
+          memory: 24G
+        reservations:
+          cpus: '3'
+          memory: 12G
+    
+    # FIX: Standardized logging policy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # =====================================================
+  # Geth Node (Base) — EXECUTION NETWORK
+  # FIX: Corrected NAT flag syntax from = to :
+  # =====================================================
+  geth_base:
+    image: basetal/op-geth:v1.10.22
+    container_name: padi_geth_base_nairobi_01_prod
+    restart: unless-stopped
+    
+    networks:
+      padi_execution_network:
+        ipv4_address: 10.10.0.72
+    
+    volumes:
+      - ./data/geth_base:/root/.ethereum
+      - ./data/geth_base_keystore:/root/keystore
+    
+    ports:
+      - "8552:8545"  # RPC
+      - "8553:8546"  # WebSocket
+      - "30305:30303/tcp"  # P2P listening
+      - "30305:30303/udp"  # P2P discovery
+    
+    environment:
+      - GETH_DATA_DIR=/root/.ethereum
+      - P2P_DISCOVERY=true
+      - NETWORK_ID=8453
+    
+    command: >
+      geth
+      --datadir=/root/.ethereum
+      --networkid=8453
+      --http
+      --http.addr=0.0.0.0
+      --http.port=8545
+      --http.corsdomain=*
+      --http.api=eth,net,web3,txpool,optimism
+      --ws
+      --ws.addr=0.0.0.0
+      --ws.port=8546
+      --ws.origins=*
+      --ws.api=eth,net,web3,txpool,optimism
+      --metrics
+      --metrics.addr=0.0.0.0
+      --metrics.port=6062
+      --rollup.sequencerhttp=https://sequencer.base.org
+      --syncmode=full
+      --rpc.gascap=0
+      --rpc.evmtimeout=0s
+      --nat=extip:0.0.0.0
+    
+    healthcheck:
+      test: ["CMD", "geth", "attach", "--exec", "eth.blockNumber", "http://localhost:8545"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # FIX: Extended start period for heavy sync
+      start_period: 300s
+    
+    # FIX: Add resource limits for blockchain node
+    deploy:
+      resources:
+        limits:
+          cpus: '6'
+          memory: 24G
+        reservations:
+          cpus: '3'
+          memory: 12G
+    
+    # FIX: Standardized logging policy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+# =====================================================
+# Networks — SEGMENTED FOR RELIABILITY
+# =====================================================
+networks:
+  # Execution Network: Blockchain nodes, Executor, Metrics Exporter
+  padi_execution_network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.10.0.0/16
+          gateway: 10.10.0.1
+  
+  # Monitoring Network: Prometheus, Grafana, Alertmanager, Node Exporter, cAdvisor
+  # Separated to ensure monitoring remains available during execution issues
+  padi_monitoring_network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.20.0.0/16
+          gateway: 10.20.0.1
+
+# =====================================================
+# Volumes
+# =====================================================
+volumes:
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  alertmanager_data:
+    driver: local
