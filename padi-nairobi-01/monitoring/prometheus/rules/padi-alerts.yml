@@ -1,8 +1,8 @@
 # =====================================================
-# Prometheus Alert Rules — PADI Nairobi-01 PROD v2.1
+# Prometheus Alert Rules — PADI Nairobi-01 PROD v2.1.1
 # =====================================================
 #
-# Sovereign Perfection — Production Observatory v2.1
+# Sovereign Perfection — Production Observatory v2.1.1
 # Nairobi Node-01 — PADI Sovereign Bureau
 #
 # ALERT RULES DEFINITIONS:
@@ -21,10 +21,12 @@
 #   v2.0: Initial alert definitions
 #   v2.1: Added GethNodeTimestampLag alert
 #   v2.1.1: Removed abs() from GethNodeTimestampLag (forward-progressing chain)
+#   v2.1.2: Corrected filename to padi-alerts.yml
 #
-# Version: 2.1.1-PROD
+# Version: 2.1.2-PROD
 # Node: Nairobi-01
 # Environment: Production
+# File: monitoring/prometheus/rules/padi-alerts.yml
 # =====================================================
 
 groups:
