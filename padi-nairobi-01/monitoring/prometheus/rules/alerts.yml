@@ -1,0 +1,191 @@
+# =====================================================
+# Prometheus Alert Rules — PADI Nairobi-01 PROD v2.1
+# =====================================================
+#
+# Sovereign Perfection — Production Observatory v2.1
+# Nairobi Node-01 — PADI Sovereign Bureau
+#
+# ALERT RULES DEFINITIONS:
+#   ✅ Watchdog — External heartbeat via Healthchecks.io
+#   ✅ GethNodeTimestampLag — Geth blockchain node synchronization
+#   ✅ ExecutorServiceDown — Executor service availability
+#   ✅ NodeExporterDown — Host metrics collector
+#   ✅ PrometheusDown — Monitoring platform health
+#   ✅ AlertmanagerDown — Alert routing health
+#   ✅ GrafanaDown — Dashboard platform health
+#   ✅ HighMemoryUsage — Host memory usage threshold
+#   ✅ HighCpuUsage — Host CPU usage threshold
+#   ✅ DiskSpaceLow — Host disk space threshold
+#
+# VERSION HISTORY:
+#   v2.0: Initial alert definitions
+#   v2.1: Added GethNodeTimestampLag alert
+#
+# Version: 2.1-PROD
+# Node: Nairobi-01
+# Environment: Production
+# =====================================================
+
+groups:
+  - name: padi_nairobi_01_alerts
+    interval: 15s
+    rules:
+      # =====================================================
+      # WATCHDOG — External Heartbeat
+      # =====================================================
+      - alert: Watchdog
+        expr: vector(1)
+        for: 0m
+        labels:
+          severity: 'info'
+          service: 'monitoring'
+          category: 'heartbeat'
+        annotations:
+          summary: 'Watchdog Heartbeat — PADI Nairobi-01'
+          description: 'Healthchecks.io heartbeat notification from PADI Sovereign Bureau — Nairobi Node-01'
+          impact: 'Indicates monitoring platform is operational'
+          action: 'No action required — confirms system health'
+
+      # =====================================================
+      # GETH BLOCKCHAIN NODE ALERTS
+      # =====================================================
+      - alert: GethNodeTimestampLag
+        expr: 'abs((time() - geth_chain_timestamp_seconds{instance="10.10.0.20:6060"})) / 60 > 10'
+        for: 5m
+        labels:
+          severity: 'warning'
+          service: 'geth'
+          category: 'blockchain'
+          blockchain: 'ethereum'
+        annotations:
+          summary: 'Geth Node Timestamp Lag Exceeded 10 Minutes'
+          description: 'Timestamp lag is {{ $value | humanizeDuration }} across Ethereum network'
+          impact: 'Node synchronization may be delayed'
+          action: 'Check Geth node status: http://10.10.0.20:6060'
+
+      - alert: GethNodeDown
+        expr: 'up{job="geth", instance="10.10.0.20:6060"} == 0'
+        for: 2m
+        labels:
+          severity: 'critical'
+          service: 'geth'
+          category: 'infrastructure'
+          blockchain: 'ethereum'
+        annotations:
+          summary: 'Geth Node Unreachable'
+          description: 'Geth blockchain node at 10.10.0.20:6060 is not responding'
+          impact: 'Blockchain operations unavailable'
+          action: 'Verify Geth service: docker logs geth'
+
+      # =====================================================
+      # EXECUTOR SERVICE ALERTS
+      # =====================================================
+      - alert: ExecutorServiceDown
+        expr: 'up{job="executor", instance="executor:8080"} == 0'
+        for: 2m
+        labels:
+          severity: 'critical'
+          service: 'executor'
+          category: 'node'
+        annotations:
+          summary: 'Executor Service Unreachable'
+          description: 'Executor service is not responding for 2+ minutes'
+          impact: 'Node execution operations unavailable'
+          action: 'Restart executor: docker restart executor'
+
+      # =====================================================
+      # HOST METRICS ALERTS (node_exporter)
+      # =====================================================
+      - alert: NodeExporterDown
+        expr: 'up{job="node_exporter", instance="10.10.0.20:9100"} == 0'
+        for: 2m
+        labels:
+          severity: 'critical'
+          service: 'node_exporter'
+          category: 'host'
+        annotations:
+          summary: 'Node Exporter Unreachable'
+          description: 'Host metrics collector is offline'
+          impact: 'Host metrics unavailable for monitoring'
+          action: 'Restart node_exporter: docker restart node_exporter'
+
+      - alert: HighMemoryUsage
+        expr: '(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes{instance="10.10.0.20:9100"})) * 100 > 85'
+        for: 5m
+        labels:
+          severity: 'warning'
+          service: 'node_exporter'
+          category: 'host'
+        annotations:
+          summary: 'Host Memory Usage Above 85%'
+          description: 'Memory usage is {{ $value }}% of total'
+          impact: 'System performance degradation'
+          action: 'Check processes: top, htop'
+
+      - alert: HighCpuUsage
+        expr: '100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle", instance="10.10.0.20:9100"}[5m])) * 100) > 80'
+        for: 5m
+        labels:
+          severity: 'warning'
+          service: 'node_exporter'
+          category: 'host'
+        annotations:
+          summary: 'Host CPU Usage Above 80%'
+          description: 'CPU usage is {{ $value }}% over 5 minutes'
+          impact: 'System performance degradation'
+          action: 'Check processes: top, htop'
+
+      - alert: DiskSpaceLow
+        expr: '(node_filesystem_avail_bytes{instance="10.10.0.20:9100"} / node_filesystem_size_bytes{instance="10.10.0.20:9100"}) * 100 < 15'
+        for: 5m
+        labels:
+          severity: 'warning'
+          service: 'node_exporter'
+          category: 'host'
+        annotations:
+          summary: 'Host Disk Space Below 15%'
+          description: 'Disk partition {{ $labels.mountpoint }} has {{ $value }}% available'
+          impact: 'Potential disk full scenario'
+          action: 'Check disk usage: df -h'
+
+      # =====================================================
+      # MONITORING PLATFORM ALERTS
+      # =====================================================
+      - alert: PrometheusDown
+        expr: 'up{job="prometheus", instance="localhost:9090"} == 0'
+        for: 2m
+        labels:
+          severity: 'critical'
+          service: 'monitoring'
+          category: 'infrastructure'
+        annotations:
+          summary: 'Prometheus Server Unreachable'
+          description: 'Prometheus metrics platform is offline'
+          impact: 'All monitoring data unavailable'
+          action: 'Restart Prometheus: docker restart prometheus'
+
+      - alert: AlertmanagerDown
+        expr: 'up{job="alertmanager"} == 0'
+        for: 2m
+        labels:
+          severity: 'critical'
+          service: 'monitoring'
+          category: 'infrastructure'
+        annotations:
+          summary: 'Alertmanager Unreachable'
+          description: 'Alert routing engine is offline'
+          impact: 'Alert notifications not dispatched'
+          action: 'Restart Alertmanager: docker restart alertmanager'
+
+      - alert: GrafanaDown
+        expr: 'up{job="grafana"} == 0'
+        for: 2m
+        labels:
+          severity: 'critical'
+          service: 'monitoring'
+          category: 'infrastructure'
+        annotations:
+          summary: 'Grafana Dashboard Unreachable'
+          description: 'Visualization platform is offline'
+          impact: 'Dashboard access unavailable'
+          action: 'Restart Grafana: docker restart grafana'
