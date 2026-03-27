@@ -1,0 +1,33 @@
+# =====================================================
+# Grafana Dashboard Provisioning — PADI Nairobi-01 PROD v2.1
+# =====================================================
+#
+# Sovereign Perfection — Production Observatory v2.1
+# Nairobi Node-01 — PADI Sovereign Bureau
+#
+# PURPOSE: Automatic Dashboard Loading
+# FEATURES:
+#   ✅ Auto-load dashboards from /var/lib/grafana/dashboards
+#   ✅ PADI main dashboard provisioning
+#   ✅ No manual dashboard import required
+#   ✅ Persists across Grafana restarts
+#   ✅ Production-ready configuration
+#
+# Version: 2.1-PROD
+# Node: Nairobi-01
+# Environment: Production
+# =====================================================
+
+apiVersion: 1
+
+providers:
+  - name: 'PADI Dashboards'
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: true
