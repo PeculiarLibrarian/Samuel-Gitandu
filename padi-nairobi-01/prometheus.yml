@@ -1,41 +1,188 @@
 # =====================================================
 # PADI EXECUTOR v5.3 — Prometheus Configuration
 # =====================================================
+#
+# Version: 5.3 - Auditor Approved Corrections Applied
+# Node: Nairobi-01
+# Timestamp: 2026-03-26 [EAT]
 
+# =====================================================
+# Global Configuration
+# =====================================================
 global:
+  # Default scrape interval
   scrape_interval: 15s
+  
+  # Default evaluation interval for rules
   evaluation_interval: 15s
+  
+  # External labels for federated clusters
   external_labels:
-    node: 'nairobi-01'
+    cluster: 'padi-nairobi-01'
+    region: 'east-africa'
     environment: 'production'
 
-# Alertmanager Configuration
+# =====================================================
+# Alertmanager Integration
+# =====================================================
 alerting:
   alertmanagers:
     - static_configs:
-        - targets: ['localhost:9093']
+        - targets:
+            - 'alertmanager:9093'
+      timeout: 10s
+      api_version: v2
 
-# Load Rules
+# =====================================================
+# Rule Files
+# =====================================================
 rule_files:
-  - "alert_rules.yml"
+  - '/etc/prometheus/alert_rules.yml'
 
+# =====================================================
 # Scrape Configurations
+# =====================================================
 scrape_configs:
-  # PADI Executor Metrics
+  # =====================================================
+  # PADI Executor
+  # =====================================================
   - job_name: 'padi_executor'
     static_configs:
-      - targets: ['localhost:8000']
-    scrape_interval: 10s
+      - targets: ['padi_executor']
+        labels:
+          instance: 'executor_nairobi_01'
+          service: 'executor'
+          component: 'core'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    honor_labels: true
+    honor_timestamps: true
     metrics_path: '/metrics'
 
-  # Web3 Node Metrics (Geth/Nethermind)
-  - job_name: 'geth_node'
+  # =====================================================
+  # PADI Metrics Exporter
+  # =====================================================
+  - job_name: 'padi_metrics_exporter'
     static_configs:
-      - targets: ['localhost:8545']
-    scrape_interval: 30s
+      - targets: ['padi_metrics_exporter:8000']
+        labels:
+          instance: 'exporter_nairobi_01'
+          service: 'exporter'
+          component: 'monitoring'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    honor_labels: true
+    honor_timestamps: true
+    metrics_path: '/metrics'
 
-  # Host Metrics (Node Exporter)
+  # =====================================================
+  # Prometheus Self-Scrape
+  # =====================================================
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          instance: 'prometheus_nairobi_01'
+          service: 'prometheus'
+          component: 'monitoring'
+
+  # =====================================================
+  # Alertmanager
+  # =====================================================
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['alertmanager:9093']
+        labels:
+          instance: 'alertmanager_nairobi_01'
+          service: 'alertmanager'
+          component: 'alerting'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # =====================================================
+  # Node Exporter (System Metrics)
+  # =====================================================
   - job_name: 'node_exporter'
     static_configs:
-      - targets: ['localhost:9100']
+      - targets: ['node_exporter:9100']
+        labels:
+          instance: 'nairobi-01'
+          service: 'node_exporter'
+          component: 'infrastructure'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # =====================================================
+  # cAdvisor (Container Metrics)
+  # =====================================================
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+        labels:
+          instance: 'nairobi-01'
+          service: 'cadvisor'
+          component: 'infrastructure'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # =====================================================
+  # Geth Node (Ethereum Mainnet) — AUDIT REFINEMENT APPLIED
+  # =====================================================
+  # 
+  # IMPORTANT: Geth must be started with these flags:
+  # 
+  #   geth --metrics --metrics.addr=0.0.0.0 --metrics.port=8545
+  #
+  # For Docker deployments, use host.docker.internal to access host:
+  #   targets: ['host.docker.internal:8545']
+  #
+  # If running Geth in a separate container, use service name:
+  #   targets: ['geth_mainnet:8545']
+  #
+  # =====================================================
+  - job_name: 'geth_mainnet'
+    static_configs:
+      - targets: ['geth_mainnet:8545']
+        labels:
+          instance: 'geth_mainnet_nairobi_01'
+          network: 'ethereum'
+          chain_id: '1'
+          service: 'geth'
+          component: 'blockchain'
     scrape_interval: 30s
+    scrape_timeout: 20s
+    metrics_path: '/debug/metrics/prometheus'
+
+  # =====================================================
+  # Geth Node (Polygon PoS) — AUDIT REFINEMENT APPLIED
+  # =====================================================
+  # Same notes as Ethereum Mainnet apply here
+  - job_name: 'geth_polygon'
+    static_configs:
+      - targets: ['geth_polygon:8546']
+        labels:
+          instance: 'geth_polygon_nairobi_01'
+          network: 'polygon'
+          chain_id: '137'
+          service: 'geth'
+          component: 'blockchain'
+    scrape_interval: 30s
+    scrape_timeout: 20s
+    metrics_path: '/debug/metrics/prometheus'
+
+  # =====================================================
+  # Geth Node (Base) — AUDIT REFINEMENT APPLIED
+  # =====================================================
+  # Same notes as Ethereum Mainnet apply here
+  - job_name: 'geth_base'
+    static_configs:
+      - targets: ['geth_base:8547']
+        labels:
+          instance: 'geth_base_nairobi_01'
+          network: 'base'
+          chain_id: '8453'
+          service: 'geth'
+          component: 'blockchain'
+    scrape_interval: 30s
+    scrape_timeout: 20s
+    metrics_path: '/debug/metrics/prometheus'
