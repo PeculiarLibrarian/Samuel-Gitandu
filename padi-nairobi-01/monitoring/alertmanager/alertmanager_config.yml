@@ -1,1 +1,184 @@
+# =====================================================
+# Alertmanager Configuration — PADI Nairobi-01 PROD v2.1
+# =====================================================
+#
+# Sovereign Perfection — Production Observatory v2.1
+# Nairobi Node-01 — PADI Sovereign Bureau
+#
+# CHANGES IN v2.1:
+#   ✅ Fixed redundant infrastructure route
+#   ✅ Explicit .env variable documentation
+#   ✅ Cleanup optimization
+#
+# VERSION HISTORY:
+#   v2.0: Recursive routing, selective resolution, external heartbeat
+#   v2.1: Redundant route removal, .env cleanup
+#
+# Version: 2.1-PROD
+# Node: Nairobi-01
+# Environment: Production
+# =====================================================
+
+global:
+  resolve_timeout: 5m
+  
+  smtp_smarthost: '${SMTP_SMARTHOST:-smtp.gmail.com:587}'
+  smtp_from: '${SMTP_FROM:-prometheus@padi-nairobi-01}'
+  smtp_auth_username: '${SMTP_AUTH_USERNAME:-your-email@gmail.com}'
+  smtp_auth_password: '${SMTP_AUTH_PASSWORD:-your-app-password}'
+  
+  # 🔒 SECURITY: TLS ENFORCEMENT (CRITICAL)
+  smtp_require_tls: true
+  
+  slack_api_url: '${SLACK_WEBHOOK_URL}'
+
+route:
+  receiver: 'default'
+  group_by: ['alertname', 'cluster', 'service', 'instance']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: '${ALERT_REPEAT_INTERVAL_WARNING:-4h}'
+
+  # Optional: Define mute windows for scheduled maintenance
+  mute_time_intervals:
+    - name: 'nairobi_maintenance_window'
+      time_intervals:
+        - days_of_week: ['sunday']
+          times:
+            - start_time: '02:00'
+              end_time: '04:00'
+
+  routes:
+    # High-Priority: Watchdog (External Heartbeat) — CRITICAL: First route
+    - match:
+        alertname: Watchdog
+      receiver: 'heartbeat'
+      repeat_interval: 1m
+
+    # High-Priority: Criticals (War Room) — CRITICAL: With continue: true
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      repeat_interval: '${ALERT_REPEAT_INTERVAL_CRITICAL:-15m}'
+      continue: true # ✅ CRITICAL: Allows alert to cascade to service receivers
+
+    # Service-specific paths
+    - match: { service: executor }
+      receiver: 'executor-alerts'
+    
+    - match: { service: geth }
+      receiver: 'infrastructure-alerts'
+    
+    - match: { service: monitoring }
+      receiver: 'devops-alerts'
+    
+    - match: { service: node_exporter }
+      receiver: 'infrastructure-alerts'
+    
+    # Infrastructure route with maintenance window (merged route)
+    - match: { service: infrastructure }
+      receiver: 'infrastructure-alerts'
+      mute_time_intervals: ['nairobi_maintenance_window']
+
+receivers:
+  - name: 'default'
+    email_configs:
+      - to: '${EMAIL_INFO:-digest@padi-nairobi-01}'
+        send_resolved: false # ✅ Suppress resolution noise
+  
+  - name: 'heartbeat'
+    webhook_configs:
+      - url: 'https://nosnch.in/your-snitch-id' # Replace with your Healthchecks.io URL
+        send_resolved: false # ✅ Only send heartbeat, don't send resolution
+  
+  - name: 'critical-alerts'
+    slack_configs:
+      - channel: '${SLACK_CRITICAL_CHANNEL:-#padi-critical}'
+        title: '🚨 CRITICAL ALERT — PADI Nairobi-01'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        color: 'danger'
+        action_button:
+          text: 'View Dashboard'
+          url: 'http://localhost:3000/d/padi-overview'
+        send_resolved: true # ✅ Keep for critical alerts
+    
+    email_configs:
+      - to: '${EMAIL_CRITICAL:-cto@padi-nairobi-01,critical@padi-nairobi-01}'
+        headers:
+          Subject: '🚨 [CRITICAL] PADI Nairobi-01 Alert'
+        send_resolved: true # ✅ Keep for critical alerts
+    
+    webhook_configs:
+      - url: '${WEBHOOK_CRITICAL_URL:-http://localhost:5000/webhook/critical}'
+        send_resolved: true # ✅ Keep for critical alerts
+  
+  - name: 'executor-alerts'
+    slack_configs:
+      - channel: '${SLACK_ALERT_CHANNEL:-#padi-alerts}'
+        title: '⚠️  Executor Alert — PADI Nairobi-01'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        color: 'warning'
+        send_resolved: false # ✅ Suppress resolution noise
+    
+    email_configs:
+      - to: '${EMAIL_EXECUTOR:-nairobi-ops@padi-nairobi-01}'
+        headers:
+          Subject: '⚠️  [EXECUTOR] PADI Nairobi-01 Alert'
+        send_resolved: false # ✅ Suppress resolution noise
+    
+    webhook_configs:
+      - url: '${WEBHOOK_ALERT_URL:-http://localhost:5000/webhook/alerts}'
+        send_resolved: false # ✅ Suppress resolution noise
+  
+  - name: 'infrastructure-alerts'
+    slack_configs:
+      - channel: '${SLACK_OPS_CHANNEL:-#padi-ops}'
+        title: '🔧 Infrastructure Alert — PADI Nairobi-01'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        color: 'warning'
+        send_resolved: false # ✅ Suppress resolution noise
+    
+    email_configs:
+      - to: '${EMAIL_WARNING:-oncall@padi-nairobi-01}'
+        headers:
+          Subject: '🔧 [INFRASTRUCTURE] PADI Nairobi-01 Alert'
+        send_resolved: false # ✅ Suppress resolution noise
+  
+  - name: 'devops-alerts'
+    slack_configs:
+      - channel: '${SLACK_DEVOPS_CHANNEL:-#padi-devops}'
+        title: '📊 Monitoring Alert — PADI Nairobi-01'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        color: 'info'
+        send_resolved: false # ✅ Suppress resolution noise
+    
+    email_configs:
+      - to: '${EMAIL_INFRA:-devops@padi-nairobi-01}'
+        headers:
+          Subject: '📊 [DEVOPS] PADI Nairobi-01 Alert'
+        send_resolved: false # ✅ Suppress resolution noise
+  
+  - name: 'reports'
+    slack_configs:
+      - channel: '${SLACK_REPORTS_CHANNEL:-#padi-reports}'
+        title: '📋 Report — PADI Nairobi-01'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        color: 'good'
+        send_resolved: false # ✅ Suppress resolution noise
+
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']
+  
+  - source_match_re:
+      alertname: '^(InfoWarning|Debug)$'
+    target_match_re:
+      alertname: '^(.*Error|.*Failed)$'
+    equal: ['instance']
+
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
 
