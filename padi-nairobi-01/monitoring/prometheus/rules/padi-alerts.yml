@@ -20,8 +20,9 @@
 # VERSION HISTORY:
 #   v2.0: Initial alert definitions
 #   v2.1: Added GethNodeTimestampLag alert
+#   v2.1.1: Removed abs() from GethNodeTimestampLag (forward-progressing chain)
 #
-# Version: 2.1-PROD
+# Version: 2.1.1-PROD
 # Node: Nairobi-01
 # Environment: Production
 # =====================================================
@@ -50,7 +51,7 @@ groups:
       # GETH BLOCKCHAIN NODE ALERTS
       # =====================================================
       - alert: GethNodeTimestampLag
-        expr: 'abs((time() - geth_chain_timestamp_seconds{instance="10.10.0.20:6060"})) / 60 > 10'
+        expr: '(time() - geth_chain_timestamp_seconds{instance="10.10.0.20:6060"}) / 60 > 10'
         for: 5m
         labels:
           severity: 'warning'
@@ -59,9 +60,10 @@ groups:
           blockchain: 'ethereum'
         annotations:
           summary: 'Geth Node Timestamp Lag Exceeded 10 Minutes'
-          description: 'Timestamp lag is {{ $value | humanizeDuration }} across Ethereum network'
+          description: 'Timestamp lag is {{ $value | humanizeDuration }} — chain may have stopped progressing'
           impact: 'Node synchronization may be delayed'
-          action: 'Check Geth node status: http://10.10.0.20:6060'
+          action: 'Verify metric name: geth_chain_timestamp_seconds (may vary by Geth exporter version)'
+          remediation: 'Check Geth logs: docker logs geth --tail 100'
 
       - alert: GethNodeDown
         expr: 'up{job="geth", instance="10.10.0.20:6060"} == 0'
