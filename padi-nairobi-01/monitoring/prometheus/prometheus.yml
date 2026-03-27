@@ -1,132 +1,81 @@
+# =====================================================
+# Prometheus Configuration — PADI Nairobi-01 PROD v2.1.1
+# =====================================================
+# Sovereign Perfection — Final Production Build
+# =====================================================
+
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
   
   external_labels:
     cluster: 'padi-nairobi-01'
-    node_id: 'Nairobi-01'
+    node: 'nairobi-01'
     environment: 'production'
-    region: 'East Africa'
+    bureau: 'padi-sovereign-bureau'
 
 alerting:
   alertmanagers:
     - static_configs:
-        - targets:
-            - 'alertmanager:9093'
+        - targets: ['alertmanager:9093']
       timeout: 10s
       api_version: v2
 
 rule_files:
-  - '/etc/prometheus/alert_rules.yml'
+  - '/etc/prometheus/rules/padi-alerts.yml'
 
 scrape_configs:
-  - job_name: 'padi_executor'
-    scrape_interval: 15s
-    scrape_timeout: 10s
-    metrics_path: /metrics
-    static_configs:
-      - targets:
-          - 'padi_executor:8000'
-        labels:
-          network: 'execution'
-          service: 'executor'
-          role: 'transaction_executor'
-  
-  - job_name: 'padi_metrics_exporter'
-    scrape_interval: 15s
-    scrape_timeout: 10s
-    metrics_path: /metrics
-    static_configs:
-      - targets:
-          - 'padi_metrics_exporter:8000'
-        labels:
-          network: 'execution'
-          service: 'metrics_exporter'
-          role: 'application_metrics'
-  
-  - job_name: 'geth_mainnet'
-    scrape_interval: 30s
-    scrape_timeout: 10s
-    metrics_path: /debug/metrics/prometheus
-    static_configs:
-      - targets:
-          - 'geth_mainnet:6060'
-        labels:
-          network: 'execution'
-          blockchain: 'ethereum'
-          service: 'geth_mainnet'
-          role: 'full_node'
-  
-  - job_name: 'geth_polygon'
-    scrape_interval: 30s
-    scrape_timeout: 10s
-    metrics_path: /debug/metrics/prometheus
-    static_configs:
-      - targets:
-          - 'geth_polygon:6061'
-        labels:
-          network: 'execution'
-          blockchain: 'polygon'
-          service: 'geth_polygon'
-          role: 'full_node'
-  
-  - job_name: 'geth_base'
-    scrape_interval: 30s
-    scrape_timeout: 10s
-    metrics_path: /debug/metrics/prometheus
-    static_configs:
-      - targets:
-          - 'geth_base:6062'
-        labels:
-          network: 'execution'
-          blockchain: 'base'
-          service: 'geth_base'
-          role: 'full_node'
-  
+  # --- INTERNAL MONITORING ---
   - job_name: 'prometheus'
-    scrape_interval: 15s
-    scrape_timeout: 10s
-    metrics_path: /metrics
     static_configs:
-      - targets:
-          - 'localhost:9090'
-        labels:
-          network: 'monitoring'
-          service: 'prometheus'
-          role: 'metrics_collector'
-  
-  - job_name: 'node_exporter'
-    scrape_interval: 15s
-    scrape_timeout: 10s
-    metrics_path: /metrics
-    static_configs:
-      - targets:
-          - 'node_exporter:9100'
-        labels:
-          network: 'monitoring'
-          service: 'node_exporter'
-          role: 'host_metrics'
-  
-  - job_name: 'cadvisor'
-    scrape_interval: 30s
-    scrape_timeout: 10s
-    metrics_path: /metrics
-    static_configs:
-      - targets:
-          - 'cadvisor:8080'
-        labels:
-          network: 'monitoring'
-          service: 'cadvisor'
-          role: 'container_metrics'
-  
+      - targets: ['localhost:9090']
+        labels: { service: 'monitoring', role: 'metrics_collector' }
+
   - job_name: 'alertmanager'
-    scrape_interval: 30s
-    scrape_timeout: 10s
-    metrics_path: /metrics
     static_configs:
-      - targets:
-          - 'alertmanager:9093'
-        labels:
-          network: 'monitoring'
-          service: 'alertmanager'
-          role: 'alert_routing'
+      - targets: ['alertmanager:9093']
+        labels: { service: 'monitoring', role: 'alert_routing' }
+
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+        labels: { service: 'monitoring', role: 'visualization' }
+
+  # --- PADI EXECUTION LAYER ---
+  - job_name: 'padi-executor'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['executor:8080']
+        labels: { service: 'executor', role: 'transaction_executor' }
+
+  # --- BLOCKCHAIN INFRASTRUCTURE (Local Node) ---
+  - job_name: 'geth'
+    metrics_path: '/debug/metrics/prometheus'
+    scrape_timeout: 10s
+    static_configs:
+      - targets: ['10.10.0.20:6060']
+        labels: 
+          service: 'geth'
+          blockchain: 'ethereum'
+          network: 'mainnet'
+          role: 'full_node'
+
+  # --- HOST & CONTAINER HEALTH ---
+  - job_name: 'node_exporter'
+    static_configs:
+      - targets: ['10.10.0.20:9100']
+        labels: { service: 'node_exporter', role: 'host_metrics' }
+
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+      # Labels are typically auto-generated by cadvisor per container
+
+  # --- EXTERNAL HEARTBEAT ---
+  - job_name: 'healthchecks_heartbeat'
+    metrics_path: '/ping'
+    scheme: 'https'
+    static_configs:
+      - targets: ['hc-ping.com']
+        labels: { service: 'monitoring', category: 'heartbeat' }
+    honor_labels: true
