@@ -1,0 +1,121 @@
+# =====================================================
+# Docker Compose — PADI Nairobi-01 Monitoring PROD v2.1.2
+# =====================================================
+# Version: 2.1.2-PROD | Node: Nairobi-01
+# =====================================================
+
+version: '3.8'
+
+networks:
+  padi_monitoring:
+    driver: bridge
+    name: padi-monitoring-net
+
+volumes:
+  prometheus_data:
+    name: padi-prometheus-data
+  alertmanager_data:
+    name: padi-alertmanager-data
+  grafana_data:
+    name: padi-grafana-data
+
+services:
+  # --- PROMETHEUS: Metrics Engine ---
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: padi-prometheus-nairobi-01-prod
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    ports:
+      - '9090:9090'
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    networks:
+      - padi_monitoring
+    environment:
+      - TZ=Africa/Nairobi
+
+  # --- ALERTMANAGER: Notification Dispatcher ---
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: padi-alertmanager-nairobi-01-prod
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    ports:
+      - '9093:9093'
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./monitoring/alertmanager/templates:/etc/alertmanager/templates:ro
+      - alertmanager_data:/alertmanager
+    networks:
+      - padi_monitoring
+    depends_on:
+      - prometheus
+    environment:
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+      - WATCHDOG_URL=${WATCHDOG_URL}
+      - TZ=Africa/Nairobi
+
+  # --- GRAFANA: Visualization Hub ---
+  grafana:
+    image: grafana/grafana:11.1.5
+    container_name: padi-grafana-nairobi-01-prod
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - padi_monitoring
+    depends_on:
+      - prometheus
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - TZ=Africa/Nairobi
+
+  # --- NODE EXPORTER: Hardware Telemetry ---
+  node_exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: padi-node-exporter-nairobi-01-prod
+    restart: unless-stopped
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/host/root'
+      - '--path.sysfs=/host/sys'
+    ports:
+      - '9100:9100'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro
+    networks:
+      - padi_monitoring
+
+  # --- CADVISOR: Container Telemetry ---
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.51.0
+    container_name: padi-cadvisor-nairobi-01-prod
+    restart: unless-stopped
+    ports:
+      - '8080:8080'
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    networks:
+      - padi_monitoring
+    privileged: true
