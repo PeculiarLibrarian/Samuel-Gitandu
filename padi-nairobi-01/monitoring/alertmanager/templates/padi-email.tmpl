@@ -1,0 +1,66 @@
+{{ define "email.padi.html" }}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: 'Segoe UI', Roboto, sans-serif; background-color: #0b0e11; color: #e0e0e0; margin: 0; padding: 20px; }
+    .container { max-width: 650px; margin: 0 auto; background: #161a1e; border: 1px solid #2b2f36; border-radius: 12px; overflow: hidden; }
+    .header { background: #c19a6b; padding: 25px; text-align: center; color: #ffffff; }
+    .header h1 { margin: 0; font-size: 22px; letter-spacing: 2px; }
+    .status-bar { padding: 12px; text-align: center; font-weight: bold; font-size: 13px; text-transform: uppercase; }
+    .firing { background: #cf304a; color: white; }
+    .resolved { background: #03a66d; color: white; }
+    .alert-card { margin: 20px; padding: 15px; background: #1e2329; border-radius: 8px; border-left: 5px solid #c19a6b; }
+    .critical { border-left-color: #f6465d; }
+    .warning { border-left-color: #f0b90b; }
+    .section-title { color: #c19a6b; font-size: 11px; font-weight: bold; text-transform: uppercase; margin-bottom: 4px; }
+    .content { font-size: 14px; margin-bottom: 12px; line-height: 1.5; }
+    .metadata { background: #0b0e11; padding: 10px; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 12px; color: #848e9c; }
+    .footer { padding: 20px; text-align: center; font-size: 11px; color: #848e9c; border-top: 1px solid #2b2f36; }
+    .btn { display: inline-block; padding: 10px 20px; background: #c19a6b; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🏛️ PADI SOVEREIGN BUREAU</h1>
+      <div style="font-size: 12px; opacity: 0.8; margin-top: 5px;">Nairobi Node-01 — Production Observatory</div>
+    </div>
+
+    <div class="status-bar {{ if eq .Status "firing" }}firing{{ else }}resolved{{ end }}">
+      {{ if eq .Status "firing" }}🚨 {{ .Alerts.Firing | len }} ACTIVE ALERTS{{ else }}✅ SYSTEM RECOVERED{{ end }}
+    </div>
+
+    {{ range .Alerts }}
+    <div class="alert-card {{ .Labels.severity }}">
+      <div style="font-size: 18px; font-weight: bold; margin-bottom: 15px;">
+        {{ if eq .Labels.severity "critical" }}🔴{{ else if eq .Labels.severity "warning" }}🟡{{ else }}🔵{{ end }} {{ .Labels.alertname }}
+      </div>
+      
+      <div class="section-title">Summary</div>
+      <div class="content">{{ .Annotations.summary }}</div>
+
+      <div class="section-title">Description</div>
+      <div class="content">{{ .Annotations.description }}</div>
+
+      <div class="section-title">Impact / Action</div>
+      <div class="content"><strong>Impact:</strong> {{ .Annotations.impact }}<br><strong>Action:</strong> {{ .Annotations.action }}</div>
+
+      <div class="metadata">
+        Node: nairobi-01 | Service: {{ .Labels.service }}<br>
+        Started: {{ .StartsAt.Format "2006-01-02 15:04:05 EAT" }}
+      </div>
+    </div>
+    {{ end }}
+
+    <div class="footer">
+      🏛️ PADI Protocol v2.1 — Nairobi Bureau<br>
+      Automated via SendGrid Relay | Timezone: EAT (Nairobi)
+      <br><br>
+      <a href="http://localhost:3000" class="btn">View Dashboard</a>
+    </div>
+  </div>
+</body>
+</html>
+{{ end }}
