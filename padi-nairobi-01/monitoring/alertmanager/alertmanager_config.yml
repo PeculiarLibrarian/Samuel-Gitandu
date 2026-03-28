@@ -1,27 +1,39 @@
 # =====================================================
-# Alertmanager Configuration — PADI Nairobi-01 PROD v2.1
+# Alertmanager Configuration — PADI Nairobi-01 PROD v2.2
 # =====================================================
 #
-# Sovereign Perfection — Production Observatory v2.1
+# Sovereign Perfection — Production Observatory v2.2
 # Nairobi Node-01 — PADI Sovereign Bureau
 #
-# CHANGES IN v2.1:
-#   ✅ Fixed redundant infrastructure route
-#   ✅ Explicit .env variable documentation
-#   ✅ Cleanup optimization
+# CHANGES IN v2.2:
+#   ✅ Mock data mute rule (Priority 0)
+#   ✅ Null sink receiver for development alerts
+#   ✅ Explicit timezone lock (Africa/Nairobi)
+#   ✅ Enhanced timezone documentation
+#
+# CHANGES IN v2.1.1:
+#   ✅ Added container inhibition rules
+#   ✅ Added maintenance mode downgrade routing
+#   ✅ Added webhook payload headers
+#   ✅ Verified Slack action button compatibility
+#   ✅ Enhanced inhibition rules for cascade suppression
 #
 # VERSION HISTORY:
 #   v2.0: Recursive routing, selective resolution, external heartbeat
 #   v2.1: Redundant route removal, .env cleanup
+#   v2.1.1: Enhanced inhibition, maintenance routing, webhook headers
+#   v2.2: Mock data mute, timezone lock, null sink receiver
 #
-# Version: 2.1-PROD
+# Version: 2.2-PROD
 # Node: Nairobi-01
 # Environment: Production
+# Timezone: Africa/Nairobi (EAT)
 # =====================================================
 
 global:
   resolve_timeout: 5m
   
+  # SMTP Configuration
   smtp_smarthost: '${SMTP_SMARTHOST:-smtp.gmail.com:587}'
   smtp_from: '${SMTP_FROM:-prometheus@padi-nairobi-01}'
   smtp_auth_username: '${SMTP_AUTH_USERNAME:-your-email@gmail.com}'
@@ -30,53 +42,73 @@ global:
   # 🔒 SECURITY: TLS ENFORCEMENT (CRITICAL)
   smtp_require_tls: true
   
-  slack_api_url: '${SLACK_WEBHOOK_URL}'
+  # Slack Configuration
+  slack_api_url: '${SLACK_WEBHOOK_URL:-}'
 
 route:
   receiver: 'default'
-  group_by: ['alertname', 'cluster', 'service', 'instance']
+  group_by: ['alertname', 'cluster', 'service', 'instance', 'severity']
   group_wait: 30s
   group_interval: 5m
   repeat_interval: '${ALERT_REPEAT_INTERVAL_WARNING:-4h}'
 
-  # Optional: Define mute windows for scheduled maintenance
+  # Maintenance Windows
   mute_time_intervals:
     - name: 'nairobi_maintenance_window'
       time_intervals:
-        - days_of_week: ['sunday']
+        - location: 'Africa/Nairobi'  # ✅ EXPLICIT TIMEZONE LOCK
+          days_of_week: ['sunday']
           times:
             - start_time: '02:00'
               end_time: '04:00'
 
   routes:
-    # High-Priority: Watchdog (External Heartbeat) — CRITICAL: First route
+    # Priority 0: Mock/Development Data Exclusion
+    - match:
+        env: mock
+      receiver: 'null-sink'
+      continue: false  # ✅ IMMEDIATE TERMINATION — No cascade
+
+    # Priority 1: Watchdog (External Heartbeat)
     - match:
         alertname: Watchdog
       receiver: 'heartbeat'
       repeat_interval: 1m
 
-    # High-Priority: Criticals (War Room) — CRITICAL: With continue: true
+    # Priority 2: Criticals (War Room)
     - match:
         severity: critical
       receiver: 'critical-alerts'
       repeat_interval: '${ALERT_REPEAT_INTERVAL_CRITICAL:-15m}'
-      continue: true # ✅ CRITICAL: Allows alert to cascade to service receivers
+      continue: true  # ✅ CRITICAL: Allows alert to cascade to service receivers
 
-    # Service-specific paths
-    - match: { service: executor }
+    # Priority 3: During maintenance, downgrade critical to warning
+    - match:
+        severity: critical
+      receiver: 'maintenance-alerts'
+      mute_time_intervals: ['nairobi_maintenance_window']
+      continue: true  # Allows cascade to continue even during maintenance
+
+    # Service-specific routes
+    - match:
+        service: executor
       receiver: 'executor-alerts'
     
-    - match: { service: geth }
+    - match:
+        service: geth
       receiver: 'infrastructure-alerts'
     
-    - match: { service: monitoring }
+    - match:
+        service: monitoring
       receiver: 'devops-alerts'
     
-    - match: { service: node_exporter }
+    - match:
+        service: node_exporter
       receiver: 'infrastructure-alerts'
     
-    # Infrastructure route with maintenance window (merged route)
-    - match: { service: infrastructure }
+    # Infrastructure route with maintenance window
+    - match:
+        service: infrastructure
       receiver: 'infrastructure-alerts'
       mute_time_intervals: ['nairobi_maintenance_window']
 
@@ -84,101 +116,287 @@ receivers:
   - name: 'default'
     email_configs:
       - to: '${EMAIL_INFO:-digest@padi-nairobi-01}'
-        send_resolved: false # ✅ Suppress resolution noise
+        send_resolved: false
+  
+  - name: 'null-sink'
+    # ✅ PURPOSE: Discard mock/development alerts entirely
+    # No notification channels configured
+    # Alerts are logged but silenced
+    # Receives: alerts with label env: mock
   
   - name: 'heartbeat'
     webhook_configs:
-      - url: 'https://nosnch.in/your-snitch-id' # Replace with your Healthchecks.io URL
-        send_resolved: false # ✅ Only send heartbeat, don't send resolution
+      - url: '${HEALTHCHECKS_IO_URL:-https://nosnch.in/REPLACE-WITH-YOUR-ACTUAL-PROJECT-SLUG}'
+        send_resolved: false
   
   - name: 'critical-alerts'
     slack_configs:
       - channel: '${SLACK_CRITICAL_CHANNEL:-#padi-critical}'
         title: '🚨 CRITICAL ALERT — PADI Nairobi-01'
-        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Labels.alertname }}
+          *Severity:* {{ .Labels.severity }}
+          *Instance:* {{ .Labels.instance }}
+          *Service:* {{ .Labels.service }}
+          
+          *Description:*
+          {{ .Annotations.description }}
+          
+          *Summary:*
+          {{ .Annotations.summary }}
+          {{ end }}
         color: 'danger'
-        action_button:
-          text: 'View Dashboard'
-          url: 'http://localhost:3000/d/padi-overview'
-        send_resolved: true # ✅ Keep for critical alerts
+        footer: 'PADI Nairobi-01 — Alertmanager v2.2 | Timezone: EAT'
+        send_resolved: true
     
     email_configs:
       - to: '${EMAIL_CRITICAL:-cto@padi-nairobi-01,critical@padi-nairobi-01}'
         headers:
           Subject: '🚨 [CRITICAL] PADI Nairobi-01 Alert'
-        send_resolved: true # ✅ Keep for critical alerts
+        html: |
+          {{ range .Alerts }}
+          <h2>🚨 CRITICAL ALERT</h2>
+          <p><strong>Alert:</strong> {{ .Labels.alertname }}</p>
+          <p><strong>Severity:</strong> {{ .Labels.severity }}</p>
+          <p><strong>Instance:</strong> {{ .Labels.instance }}</p>
+          <p><strong>Service:</strong> {{ .Labels.service }}</p>
+          <hr>
+          <h3>Description</h3>
+          <p>{{ .Annotations.description }}</p>
+          <h3>Summary</h3>
+          <p>{{ .Annotations.summary }}</p>
+          <hr>
+          <p><em>Timestamp: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}</em></p>
+          {{ end }}
+        send_resolved: true
     
     webhook_configs:
       - url: '${WEBHOOK_CRITICAL_URL:-http://localhost:5000/webhook/critical}'
-        send_resolved: true # ✅ Keep for critical alerts
+        http_config:
+          headers:
+            Content-Type: 'application/json'
+            X-PADI-Node: 'nairobi-01'
+            X-PADI-Environment: 'production'
+            X-PADI-Severity: 'critical'
+        send_resolved: true
   
   - name: 'executor-alerts'
     slack_configs:
       - channel: '${SLACK_ALERT_CHANNEL:-#padi-alerts}'
         title: '⚠️  Executor Alert — PADI Nairobi-01'
-        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Labels.alertname }}
+          *Instance:* {{ .Labels.instance }}
+          
+          *Summary:*
+          {{ .Annotations.summary }}
+          {{ end }}
         color: 'warning'
-        send_resolved: false # ✅ Suppress resolution noise
+        footer: 'PADI Nairobi-01 — Alertmanager v2.2 | Timezone: EAT'
+        send_resolved: false
     
     email_configs:
       - to: '${EMAIL_EXECUTOR:-nairobi-ops@padi-nairobi-01}'
         headers:
           Subject: '⚠️  [EXECUTOR] PADI Nairobi-01 Alert'
-        send_resolved: false # ✅ Suppress resolution noise
+        html: |
+          {{ range .Alerts }}
+          <h2>⚠️ EXECUTOR ALERT</h2>
+          <p><strong>Alert:</strong> {{ .Labels.alertname }}</p>
+          <p><strong>Instance:</strong> {{ .Labels.instance }}</p>
+          <p><strong>Severity:</strong> {{ .Labels.severity }}</p>
+          <hr>
+          <h3>Summary</h3>
+          <p>{{ .Annotations.summary }}</p>
+          <p><strong>Description:</strong></p>
+          <p>{{ .Annotations.description }}</p>
+          <hr>
+          <p><em>Timestamp: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}</em></p>
+          {{ end }}
+        send_resolved: false
     
     webhook_configs:
       - url: '${WEBHOOK_ALERT_URL:-http://localhost:5000/webhook/alerts}'
-        send_resolved: false # ✅ Suppress resolution noise
+        http_config:
+          headers:
+            Content-Type: 'application/json'
+            X-PADI-Node: 'nairobi-01'
+            X-PADI-Environment: 'production'
+            X-PADI-Service: 'executor'
+        send_resolved: false
   
   - name: 'infrastructure-alerts'
     slack_configs:
       - channel: '${SLACK_OPS_CHANNEL:-#padi-ops}'
         title: '🔧 Infrastructure Alert — PADI Nairobi-01'
-        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Labels.alertname }}
+          *Instance:* {{ .Labels.instance }}
+          
+          *Summary:*
+          {{ .Annotations.summary }}
+          {{ end }}
         color: 'warning'
-        send_resolved: false # ✅ Suppress resolution noise
+        footer: 'PADI Nairobi-01 — Alertmanager v2.2 | Timezone: EAT'
+        send_resolved: false
     
     email_configs:
       - to: '${EMAIL_WARNING:-oncall@padi-nairobi-01}'
         headers:
           Subject: '🔧 [INFRASTRUCTURE] PADI Nairobi-01 Alert'
-        send_resolved: false # ✅ Suppress resolution noise
+        html: |
+          {{ range .Alerts }}
+          <h2>🔧 INFRASTRUCTURE ALERT</h2>
+          <p><strong>Alert:</strong> {{ .Labels.alertname }}</p>
+          <p><strong>Instance:</strong> {{ .Labels.instance }}</p>
+          <p><strong>Severity:</strong> {{ .Labels.severity }}</p>
+          <hr>
+          <h3>Summary</h3>
+          <p>{{ .Annotations.summary }}</p>
+          <hr>
+          <p><em>Timestamp: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}</em></p>
+          {{ end }}
+        send_resolved: false
   
   - name: 'devops-alerts'
     slack_configs:
       - channel: '${SLACK_DEVOPS_CHANNEL:-#padi-devops}'
         title: '📊 Monitoring Alert — PADI Nairobi-01'
-        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
-        color: 'info'
-        send_resolved: false # ✅ Suppress resolution noise
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Labels.alertname }}
+          *Instance:* {{ .Labels.instance }}
+          
+          *Summary:*
+          {{ .Annotations.summary }}
+          {{ end }}
+        color: '#36a64f'  # good/info
+        footer: 'PADI Nairobi-01 — Alertmanager v2.2 | Timezone: EAT'
+        send_resolved: false
     
     email_configs:
       - to: '${EMAIL_INFRA:-devops@padi-nairobi-01}'
         headers:
           Subject: '📊 [DEVOPS] PADI Nairobi-01 Alert'
-        send_resolved: false # ✅ Suppress resolution noise
+        html: |
+          {{ range .Alerts }}
+          <h2>📊 DEVOPS ALERT</h2>
+          <p><strong>Alert:</strong> {{ .Labels.alertname }}</p>
+          <p><strong>Instance:</strong> {{ .Labels.instance }}</p>
+          <p><strong>Severity:</strong> {{ .Labels.severity }}</p>
+          <hr>
+          <h3>Summary</h3>
+          <p>{{ .Annotations.summary }}</p>
+          <hr>
+          <p><em>Timestamp: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}</em></p>
+          {{ end }}
+        send_resolved: false
+  
+  - name: 'maintenance-alerts'
+    slack_configs:
+      - channel: '${SLACK_MAINTENANCE_CHANNEL:-#padi-maintenance}'
+        title: '🔧 Maintenance Mode Alert — PADI Nairobi-01'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Labels.alertname }}
+          *Instance:* {{ .Labels.instance }}
+          
+          *Description:*
+          {{ .Annotations.description }}
+          
+          *Note:* Alert is currently in maintenance window (Sunday 02:00-04:00 EAT)
+          {{ end }}
+        color: 'warning'
+        footer: 'PADI Nairobi-01 — Alertmanager v2.2 | Timezone: EAT'
+        send_resolved: true
+  
+    email_configs:
+      - to: '${EMAIL_MAINTENANCE:-maintenance-team@padi-nairobi-01}'
+        headers:
+          Subject: '🔧 [MAINTENANCE] PADI Nairobi-01 Alert'
+        html: |
+          {{ range .Alerts }}
+          <h2>🔧 MAINTENANCE ALERT</h2>
+          <p><strong>Alert:</strong> {{ .Labels.alertname }}</p>
+          <p><strong>Instance:</strong> {{ .Labels.instance }}</p>
+          <p><strong>Severity:</strong> {{ .Labels.severity }}</p>
+          <hr>
+          <h3>Description</h3>
+          <p>{{ .Annotations.description }}</p>
+          <hr>
+          <p><em>Note: Alert is currently in maintenance window (Sunday 02:00-04:00 EAT)</em></p>
+          <p><em>Timestamp: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}</em></p>
+          {{ end }}
+        send_resolved: true
   
   - name: 'reports'
     slack_configs:
       - channel: '${SLACK_REPORTS_CHANNEL:-#padi-reports}'
         title: '📋 Report — PADI Nairobi-01'
-        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
-        color: 'good'
-        send_resolved: false # ✅ Suppress resolution noise
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Labels.alertname }}
+          
+          *Summary:*
+          {{ .Annotations.summary }}
+          {{ end }}
+        color: '#36a64f'  # good
+        footer: 'PADI Nairobi-01 — Alertmanager v2.2 | Timezone: EAT'
+        send_resolved: false
 
 inhibit_rules:
+  # Rule 1: Critical suppresses warning for same alert and instance
   - source_match:
       severity: 'critical'
     target_match:
       severity: 'warning'
     equal: ['alertname', 'instance']
   
+  # Rule 2: Info/Debug suppresses Error/Failed for same instance
   - source_match_re:
       alertname: '^(InfoWarning|Debug)$'
     target_match_re:
       alertname: '^(.*Error|.*Failed)$'
     equal: ['instance']
+  
+  # Rule 3: Suppress individual executor node down if global service down
+  - source_match:
+      alertname: 'ExecutorServiceDown'
+      service: 'executor'
+    target_match:
+      alertname: 'ExecutorNodeDown'
+    equal: ['instance']
+  
+  # Rule 4: Suppress container alerts if node is down
+  - source_match:
+      alertname: 'NodeDown'
+    target_match_re:
+      alertname: '(ContainerCPUHigh|ContainerMemoryHigh|ContainerDiskSpaceLow)'
+    equal: ['instance']
+  
+  # Rule 5: Suppress individual resource alerts if host is down
+  - source_match:
+      alertname: 'HostDown'
+    target_match_re:
+      alertname: '.*'
+    equal: ['instance']
+  
+  # Rule 6: Suppress blockchain sync alerts if node is down
+  - source_match:
+      alertname: 'ExecutorNodeDown'
+    target_match_re:
+      alertname: '(BlockHeightStalled|PeerCountLow|SyncStatusNotProgressing)'
+    equal: ['instance']
+  
+  # Rule 7: Suppress RPC endpoint alerts if RPC health check fails globally
+  - source_match:
+      alertname: 'RPCHealthCheckFailed'
+    target_match:
+      alertname: 'RPCEndpointDown'
+    equal: ['instance']
 
 templates:
   - '/etc/alertmanager/templates/*.tmpl'
-
