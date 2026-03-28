@@ -3,10 +3,7 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": {
-          "type": "grafana",
-          "uid": "-- Grafana --"
-        },
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
@@ -36,7 +33,7 @@
   "panels": [
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "The 'Weakest Link' monitor. If any single node drops, this grid reflects the systemic vulnerability.",
+      "description": "Systemic node health. 1 = UP, 0 = DOWN. Individual node monitoring prevents averaging fallacy.",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
@@ -73,7 +70,7 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "Calculated relative TVL health against the Bureau target.",
+      "description": "Calculated relative TVL health against the Bureau target. Resilient to market volatility.",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
@@ -90,7 +87,7 @@
           "unit": "percent"
         }
       },
-      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 },
+      "gridPos": { "h": 6, "w": 4, "x": 12, "y": 0 },
       "id": 4,
       "options": {
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
@@ -104,14 +101,15 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "Slashing risk detection - missed blocks for validator downtime",
+      "description": "Validator Slashing Risk: Missed Blocks tracking. Immediate red alert on any missed blocks.",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
           "mappings": [
             {
               "options": {
-                "0": { "color": "green", "index": 0, "text": "SAFE" } },
+                "0": { "color": "green", "index": 0, "text": "SAFE" }
+              },
               "type": "value"
             }
           ],
@@ -125,7 +123,7 @@
           "unit": "short"
         }
       },
-      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
+      "gridPos": { "h": 6, "w": 4, "x": 16, "y": 0 },
       "id": 14,
       "options": {
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
@@ -133,59 +131,68 @@
         "showThresholdMarkers": false
       },
       "targets": [
-        { "expr": "padi_executor_missed_blocks{node=\"$node\"}", "instant": true, "legendFormat": "Missed Blocks", "refId": "A" }
+        { "expr": "padi_executor_missed_blocks{node=\"$node\"}", "instant": true, "refId": "A" }
       ],
       "title": "Slashing Risk",
       "type": "gauge"
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "Structural integrity verification against PADI SHACL shapes.",
+      "description": "Job queue depth - critical for detecting backpressure and capacity saturation.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 50 },
+              { "color": "red", "value": 100 }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 6, "w": 4, "x": 20, "y": 0 },
+      "id": 3,
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "targets": [
+        { "expr": "padi_executor_jobs_queued{node=\"$node\"}", "instant": true, "refId": "A" }
+      ],
+      "title": "Jobs Queued",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "SHACL Integrity Map - Real-time structural validation. PASS (green) / FAIL (red).",
       "fieldConfig": {
         "defaults": {
           "custom": { "align": "auto", "displayMode": "auto" },
           "mappings": [
             {
               "options": {
-                "0": { "color": "green", "index": 0, "text": "VALID" },
-                "1": { "color": "red", "index": 1, "text": "VIOLATION" }
+                "0": { "color": "green", "text": "PASS" },
+                "1": { "color": "red", "text": "FAIL" }
               },
               "type": "value"
             }
           ]
-        },
-        "overrides": [
-          {
-            "matcher": { "id": "byName", "options": "Value" },
-            "properties": [
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "value",
-                    "options": {
-                      "0": { "text": "PASS", "color": "green" },
-                      "1": { "text": "FAIL", "color": "red" }
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        ]
+        }
       },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 6 },
       "id": 15,
       "options": { "showHeader": true },
       "targets": [
-        { "expr": "padi_shacl_validation_status{node=\"$node\"}", "legendFormat": "Status", "refId": "A" }
+        { "expr": "padi_shacl_validation_status{node=\"$node\"}", "legendFormat": "Integrity", "refId": "A" }
       ],
       "title": "SHACL Structural Validation",
       "type": "table"
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "Throughput monitoring with corrected calc logic. All rate calculations use 1-min windows for high-resolution spike detection.",
+      "description": "Job throughput with corrected calc logic. Fixed 1-min rate window for high-resolution spike detection.",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
@@ -213,7 +220,67 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "Executor CPU using regex name matching to prevent container ID fragmentation.",
+      "description": "Active workers and currently executing jobs. Determines pool saturation.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 10 }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 14 },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": ["last", "mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        { "expr": "padi_executor_jobs_in_progress{node=\"$node\"}", "refId": "A", "legendFormat": "In Progress" },
+        { "expr": "padi_executor_workers_active{node=\"$node\"}", "refId": "B", "legendFormat": "Active Workers" }
+      ],
+      "title": "Active Jobs & Workers",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Worker pool utilization percentage. Critical for scaling decisions.",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
@@ -253,8 +320,8 @@
           "unit": "percent"
         }
       },
-      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 14 },
-      "id": 9,
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 14 },
+      "id": 7,
       "options": {
         "legend": {
           "calcs": ["last", "mean"],
@@ -267,14 +334,195 @@
         }
       },
       "targets": [
-        { "expr": "sum(rate(container_cpu_usage_seconds_total{name=~\"padi-executor.*\"}[1m])) * 100", "legendFormat": "Executor CPU %", "refId": "A" }
+        { "expr": "((padi_executor_workers_active{node=\"$node\"} / padi_executor_workers_total{node=\"$node\"}) * 100) or vector(0)", "refId": "A", "legendFormat": "Worker Pool Utilization" }
+      ],
+      "title": "Worker Pool Utilization",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Job execution time distribution (P50, P95, P99). 1-min rate window. Red alert >= 30s.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 30 }
+            ]
+          },
+          "unit": "s"
+        }
+      },
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 20 },
+      "id": 8,
+      "options": {
+        "legend": {
+          "calcs": ["last", "mean", "p95"],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, rate(padi_executor_job_duration_seconds_bucket{node=\"$node\"}[1m]))", "refId": "A", "legendFormat": "P50 Duration" },
+        { "expr": "histogram_quantile(0.95, rate(padi_executor_job_duration_seconds_bucket{node=\"$node\"}[1m]))", "refId": "B", "legendFormat": "P95 Duration" },
+        { "expr": "histogram_quantile(0.99, rate(padi_executor_job_duration_seconds_bucket{node=\"$node\"}[1m]))", "refId": "C", "legendFormat": "P99 Duration" }
+      ],
+      "title": "Job Execution Time (Percentiles)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Job completion rates by status (Success, Failed, Retried). 1-min rate window.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null }
+            ]
+          },
+          "unit": "ops"
+        }
+      },
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 20 },
+      "id": 9,
+      "options": {
+        "legend": {
+          "calcs": ["last", "sum"],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        { "expr": "sum(rate(padi_executor_jobs_completed_total{node=\"$node\",status=\"success\"}[1m]))", "refId": "A", "legendFormat": "Success" },
+        { "expr": "sum(rate(padi_executor_jobs_completed_total{node=\"$node\",status=\"failed\"}[1m]))", "refId": "B", "legendFormat": "Failed" },
+        { "expr": "sum(rate(padi_executor_jobs_completed_total{node=\"$node\",status=\"retried\"}[1m]))", "refId": "C", "legendFormat": "Retried" }
+      ],
+      "title": "Job Completion Rate by Status",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Resource monitoring with persistent regex matching. Survives container ID rotation.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 70 },
+              { "color": "red", "value": 90 }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 26 },
+      "id": 10,
+      "options": {
+        "legend": {
+          "calcs": ["last", "mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        { "expr": "sum(rate(container_cpu_usage_seconds_total{name=~\"padi-executor.*\"}[1m])) * 100", "refId": "A", "legendFormat": "Executor CPU %" }
       ],
       "title": "Resource Consumption: CPU",
       "type": "timeseries"
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "Executor service memory usage using regex name matching.",
+      "description": "Memory profiling: Usage vs Working Set. Regex matching survives container rotation.",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
@@ -312,11 +560,11 @@
           "unit": "bytes"
         }
       },
-      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 14 },
-      "id": 10,
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 26 },
+      "id": 11,
       "options": {
         "legend": {
-          "calcs": ["last", "mean"],
+          "calcs": ["last", "mean", "max"],
           "displayMode": "table",
           "placement": "bottom"
         },
@@ -326,8 +574,8 @@
         }
       },
       "targets": [
-        { "expr": "sum(container_memory_usage_bytes{name=~\"padi-executor.*\"})", "legendFormat": "Memory Usage", "refId": "A" },
-        { "expr": "sum(container_memory_working_set_bytes{name=~\"padi-executor.*\"})", "legendFormat": "Working Set", "refId": "B" }
+        { "expr": "sum(container_memory_usage_bytes{name=~\"padi-executor.*\"})", "refId": "A", "legendFormat": "Memory Usage" },
+        { "expr": "sum(container_memory_working_set_bytes{name=~\"padi-executor.*\"})", "refId": "B", "legendFormat": "Working Set" }
       ],
       "title": "Resource Consumption: Memory",
       "type": "timeseries"
@@ -356,7 +604,7 @@
           }
         }
       },
-      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 20 },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 32 },
       "id": 12,
       "options": {
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
@@ -364,42 +612,14 @@
         "showThresholdMarkers": false
       },
       "targets": [
-        { "expr": "padi_node_rpc_health{node=\"$node\"}", "instant": true, "legendFormat": "RPC Health", "refId": "A" }
+        { "expr": "padi_node_rpc_health{node=\"$node\"}", "instant": true, "refId": "A" }
       ],
       "title": "RPC Health",
       "type": "gauge"
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "Job queue depth - critical for detecting backpressure.",
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 50 },
-              { "color": "red", "value": 100 }
-            ]
-          },
-          "unit": "short"
-        }
-      },
-      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 20 },
-      "id": 3,
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
-      },
-      "targets": [
-        { "expr": "padi_executor_jobs_queued{node=\"$node\"}", "instant": true, "legendFormat": "Queued", "refId": "A" }
-      ],
-      "title": "Jobs Queued",
-      "type": "gauge"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "Transaction validation rate by chain (1-min window).",
+      "description": "Transaction validation rate by chain (1-min window). TPS monitoring.",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
@@ -429,8 +649,8 @@
           "unit": "tps"
         }
       },
-      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 20 },
-      "id": 11,
+      "gridPos": { "h": 6, "w": 12, "x": 6, "y": 32 },
+      "id": 13,
       "options": {
         "legend": {
           "calcs": ["last", "sum"],
@@ -447,6 +667,39 @@
       ],
       "title": "Transaction Validation Rate",
       "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Jobs by type distribution - operational visibility into workload composition.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        }
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 32 },
+      "id": 16,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        { "expr": "sum(padi_executor_jobs_completed_total{node=\"$node\"}) by (job_type)", "refId": "A", "legendFormat": "{{job_type}}" }
+      ],
+      "title": "Jobs by Type",
+      "type": "piechart"
     }
   ],
   "refresh": "30s",
@@ -466,11 +719,25 @@
         "multi": false,
         "name": "node",
         "options": [],
-        "query": {
-          "label": "node",
-          "query": "padi_executor_jobs_in_progress",
-          "refId": "StandardPrometheusVariableQuery"
-        },
+        "query": "label_values(padi_executor_jobs_in_progress, node)",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": "",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "definition": "label_values(padi_executor_transactions_validated_total, chain_id)",
+        "description": "Filter by blockchain network (Mainnet, Testnet, etc.)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Chain ID",
+        "multi": true,
+        "name": "chain_id",
+        "options": [],
+        "query": "label_values(padi_executor_transactions_validated_total, chain_id)",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
@@ -482,8 +749,7 @@
   "time": { "from": "now-1h", "to": "now" },
   "timepicker": {},
   "timezone": "Africa/Nairobi",
-  "title": "PADI Executor Overview (V2.1-Hardened)",
-  "uid": "padi-executor-hardened",
-  "version": 3
+  "title": "PADI Executor Overview (V2.1-Improved)",
+  "uid": "padi-executor-overview",
+  "version": 4
 }
-
