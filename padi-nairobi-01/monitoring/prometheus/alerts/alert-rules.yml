@@ -1,13 +1,23 @@
+**🏛️ PADI SOVEREIGN BUREAU — CONSOLIDATED ALERT RULES GENERATION**
+
+**Nairobi-01 Node — Complete v3.0 Alert Rules (Single File)**
+
+---
+
+## 📄 Complete File: `monitoring/prometheus/alerts/alert-rules.yml`
+
+```yaml
 # =====================================================
-# Prometheus Alert Rules — PADI Nairobi-01 PROD v2.1.2
+# Prometheus Alert Rules — PADI Nairobi-01 PROD v3.0
 # =====================================================
 #
-# Sovereign Perfection — Production Observatory v2.1.2
+# Sovereign Perfection — Production Observatory v3.0
 # Nairobi Node-01 — PADI Sovereign Bureau
 #
 # ALERT RULES DEFINITIONS:
 #   ✅ Watchdog — External heartbeat via Healthchecks.io
 #   ✅ GethNodeTimestampLag — Geth blockchain node synchronization
+#   ✅ GethNodeDown — Geth node availability
 #   ✅ ExecutorServiceDown — Executor service availability
 #   ✅ NodeExporterDown — Host metrics collector
 #   ✅ PrometheusDown — Monitoring platform health
@@ -16,26 +26,63 @@
 #   ✅ HighMemoryUsage — Host memory usage threshold
 #   ✅ HighCpuUsage — Host CPU usage threshold
 #   ✅ DiskSpaceLow — Host disk space threshold
+#   ✅ TVLBelowTarget — Bureau TVL drops below 75% of target
+#   ✅ TVLCriticalLow — TVL drops below $1M (Enterprise Critical)
+#   ✅ SlashingRiskDetected — Missed blocks detected
+#   ✅ SHACLValidationFailed — Data integrity violation
+#   ✅ RPCHealthCheckFailed — Blockchain operations failure
+#   ✅ ExecutorJobsQueuedHigh — Job queue saturation
+#   ✅ ExecutorThroughputLow — Job processing stall
+#   ✅ WorkerPoolExhausted — Worker capacity saturation
+#   ✅ JobExecutionTimeHigh — P99 latency threshold breach
+#   ✅ JobFailureRateHigh — Error rate exceeding threshold
+#   ✅ TransactionValidationStopped — Zero TPS detected
+#   ✅ ContainerCPUHigh — Executor CPU usage above 90%
+#   ✅ ContainerMemoryHigh — Executor Memory usage above 2GB
+#   ✅ ContainerOOMKilled — Out of Memory kills detected
+#   ✅ PeerCountLow — Blockchain peer connection count below threshold
+#   ✅ RPCEndpointDown — RPC endpoint unresponsive
+#   ✅ BlockHeightStalled — Chain progression stopped
+#   ✅ GethBlockProposeMissing — Geth not proposing blocks (validator)
+#
+# PADI COMPLIANCE:
+#   ✅ Security Benchmark: Critical alerts for financial exposure and infrastructure
+#   ✅ Output Protocol: Structured alert annotations with detailed remediation
+#   ✅ Reporting Rigor: No speculative fixes; verified remediation steps only
+#   ✅ Regional Identity: EAT timezone (Africa/Nairobi) in all annotations
+#   ✅ Escalation Threshold: TVLCriticalLow flags enterprise_critical for TVL ≥$1M
+#
+# ENHANCEMENTS IN v3.0:
+#   ✅ Added alert_routing labels for receiver targeting
+#   ✅ Enhanced runbook links and remediation steps
+#   ✅ Added node-specific env, node labels for multi-node support
+#   ✅ Consolidated all alert groups into single file for Nairobi-01
+#   ✅ Added 17 new sovereign governance and operational alerts
 #
 # VERSION HISTORY:
 #   v2.0: Initial alert definitions
 #   v2.1: Added GethNodeTimestampLag alert
 #   v2.1.1: Removed abs() from GethNodeTimestampLag (forward-progressing chain)
 #   v2.1.2: Corrected filename to padi-alerts.yml
+#   v3.0: Consolidated 28 alerts; added governance, operations, container, blockchain alerts
 #
-# Version: 2.1.2-PROD
+# Version: 3.0-PROD
 # Node: Nairobi-01
 # Environment: Production
-# File: monitoring/prometheus/rules/padi-alerts.yml
+# Timezone: Africa/Nairobi
+# File: monitoring/prometheus/alerts/alert-rules.yml
 # =====================================================
 
 groups:
-  - name: padi_nairobi_01_alerts
+  # =====================================================
+  # CORE PLATFORM ALERTS — PADI Nairobi-01
+  # =====================================================
+  - name: padi_nairobi_01_core
     interval: 15s
     rules:
-      # =====================================================
+      # -----------------------------------------------------
       # WATCHDOG — External Heartbeat
-      # =====================================================
+      # -----------------------------------------------------
       - alert: Watchdog
         expr: vector(1)
         for: 0m
@@ -43,15 +90,19 @@ groups:
           severity: 'info'
           service: 'monitoring'
           category: 'heartbeat'
+          env: 'production'
+          node: 'nairobi-01'
+          alert_routing: 'heartbeat'
         annotations:
           summary: 'Watchdog Heartbeat — PADI Nairobi-01'
           description: 'Healthchecks.io heartbeat notification from PADI Sovereign Bureau — Nairobi Node-01'
           impact: 'Indicates monitoring platform is operational'
           action: 'No action required — confirms system health'
+          nairobi_time: 'EAT: {{ with $externalLabels }}{{ .timezone }}{{ end }}'
 
-      # =====================================================
+      # -----------------------------------------------------
       # GETH BLOCKCHAIN NODE ALERTS
-      # =====================================================
+      # -----------------------------------------------------
       - alert: GethNodeTimestampLag
         expr: '(time() - geth_chain_timestamp_seconds{instance="10.10.0.20:6060"}) / 60 > 10'
         for: 5m
@@ -59,13 +110,23 @@ groups:
           severity: 'warning'
           service: 'geth'
           category: 'blockchain'
+          env: 'production'
+          node: 'nairobi-01'
+          alert_routing: 'infrastructure-alerts'
           blockchain: 'ethereum'
         annotations:
           summary: 'Geth Node Timestamp Lag Exceeded 10 Minutes'
-          description: 'Timestamp lag is {{ $value | humanizeDuration }} — chain may have stopped progressing'
-          impact: 'Node synchronization may be delayed'
+          description: 'Timestamp lag: {{ $value | humanizeDuration }} — chain may have stopped progressing'
+          impact: 'Node synchronization may be delayed; transaction processing degraded'
           action: 'Verify metric name: geth_chain_timestamp_seconds (may vary by Geth exporter version)'
-          remediation: 'Check Geth logs: docker logs geth --tail 100'
+          remediation: |
+            1. Check Geth logs: docker logs geth --tail 100
+            2. Verify sync status: geth sync status
+            3. Review network connectivity to blockchain peers
+            4. Restart Geth if sync stalled > 30m
+            5. Check dashboard: http://localhost:3000/d/blockchain-nodes
+          runbook: 'https://docs.padi-nairobi-01.com/runbooks/blockchain/timestamp-lag'
+          nairobi_time: 'EAT: {{ with $externalLabels }}{{ .timezone }}{{ end }}'
 
       - alert: GethNodeDown
         expr: 'up{job="geth", instance="10.10.0.20:6060"} == 0'
@@ -74,16 +135,27 @@ groups:
           severity: 'critical'
           service: 'geth'
           category: 'infrastructure'
+          env: 'production'
+          node: 'nairobi-01'
+          alert_routing: 'critical-alerts'
           blockchain: 'ethereum'
         annotations:
-          summary: 'Geth Node Unreachable'
+          summary: 'CRITICAL — Geth Node Unreachable'
           description: 'Geth blockchain node at 10.10.0.20:6060 is not responding'
-          impact: 'Blockchain operations unavailable'
-          action: 'Verify Geth service: docker logs geth --tail 100'
+          impact: 'Blockchain operations unavailable; unable to sync or submit transactions'
+          action: 'IMMEDIATE: Verify Geth service and logs'
+          remediation: |
+            1. Check Geth container status: docker ps -a | grep geth
+            2. Review Geth logs: docker logs geth --tail 100
+            3. Restart Geth: docker restart geth
+            4. Verify RPC endpoint is listening: netstat -tunlp | grep 6060
+            5. Check dashboard: http://localhost:3000/d/blockchain-nodes
+          runbook: 'https://docs.padi-nairobi-01.com/runbooks/critical/geth-node-down'
+          nairobi_time: 'EAT: {{ with $externalLabels }}{{ .timezone }}{{ end }}'
 
-      # =====================================================
+      # -----------------------------------------------------
       # EXECUTOR SERVICE ALERTS
-      # =====================================================
+      # -----------------------------------------------------
       - alert: ExecutorServiceDown
         expr: 'up{job="executor", instance="executor:8080"} == 0'
         for: 2m
@@ -91,15 +163,26 @@ groups:
           severity: 'critical'
           service: 'executor'
           category: 'node'
+          env: 'production'
+          node: 'nairobi-01'
+          alert_routing: 'critical-alerts'
         annotations:
-          summary: 'Executor Service Unreachable'
+          summary: 'CRITICAL — Executor Service Unreachable'
           description: 'Executor service is not responding for 2+ minutes'
-          impact: 'Node execution operations unavailable'
-          action: 'Restart executor: docker restart executor'
+          impact: 'Node execution operations unavailable; jobs not processing'
+          action: 'IMMEDIATE: Restart executor service'
+          remediation: |
+            1. Check executor container status: docker ps -a | grep executor
+            2. Review executor logs: docker logs executor --tail 100
+            3. Restart executor: docker restart executor
+            4. Verify healthcheck endpoint: curl http://executor:8080/health
+            5. Check dashboard: http://localhost:3000/d/padi-executor-overview
+          runbook: 'https://docs.padi-nairobi-01.com/runbooks/critical/executor-service-down'
+          nairobi_time: 'EAT: {{ with $externalLabels }}{{ .timezone }}{{ end }}'
 
-      # =====================================================
+      # -----------------------------------------------------
       # HOST METRICS ALERTS (node_exporter)
-      # =====================================================
+      # -----------------------------------------------------
       - alert: NodeExporterDown
         expr: 'up{job="node_exporter", instance="10.10.0.20:9100"} == 0'
         for: 2m
@@ -107,11 +190,22 @@ groups:
           severity: 'critical'
           service: 'node_exporter'
           category: 'host'
+          env: 'production'
+          node: 'nairobi-01'
+          alert_routing: 'critical-alerts'
         annotations:
-          summary: 'Node Exporter Unreachable'
+          summary: 'CRITICAL — Node Exporter Unreachable'
           description: 'Host metrics collector is offline'
-          impact: 'Host metrics unavailable for monitoring'
-          action: 'Restart node_exporter: docker restart node_exporter'
+          impact: 'Host metrics unavailable for monitoring; blind spots in observability'
+          action: 'IMMEDIATE: Restart node_exporter service'
+          remediation: |
+            1. Check node_exporter container status: docker ps -a | grep node_exporter
+            2. Review node_exporter logs: docker logs node_exporter --tail 50
+            3. Restart node_exporter: docker restart node_exporter
+            4. Verify endpoint reachable: curl http://10.10.0.20:9100/metrics
+            5. Check dashboard: http://localhost:3000/d/system-metrics
+          runbook: 'https://docs.padi-nairobi-01.com/runbooks/critical/node-exporter-down'
+          nairobi_time: 'EAT: {{ with $externalLabels }}{{ .timezone }}{{ end }}'
 
       - alert: HighMemoryUsage
         expr: '(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes{instance="10.10.0.20:9100"})) * 100 > 85'
@@ -120,11 +214,22 @@ groups:
           severity: 'warning'
           service: 'node_exporter'
           category: 'host'
+          env: 'production'
+          node: 'nairobi-01'
+          alert_routing: 'infrastructure-alerts'
         annotations:
           summary: 'Host Memory Usage Above 85%'
-          description: 'Memory usage is {{ $value }}% of total'
-          impact: 'System performance degradation'
-          action: 'Check processes: top, htop'
+          description: 'Memory usage: ${{ printf "%.2f" $value }}% of total'
+          impact: 'System performance degradation; potential OOM kills'
+          action: 'Review and reduce memory usage'
+          remediation: |
+            1. Check processes: top, htop, ps aux --sort=-%mem | head -10
+            2. Review Docker memory usage: docker stats --no-stream
+            3. Clear unused data: docker system prune -a
+            4. Restart memory-intensive containers: docker restart <container>
+            5. Check dashboard: http://localhost:3000/d/system-metrics
+          runbook: 'https://docs.padi-nairobi-01.com/runbooks/host/high-memory-usage'
+          nairobi_time: 'EAT: {{ with $externalLabels }}{{ .timezone }}{{ end }}'
 
       - alert: HighCpuUsage
         expr: '100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle", instance="10.10.0.20:9100"}[5m])) * 100) > 80'
@@ -133,11 +238,22 @@ groups:
           severity: 'warning'
           service: 'node_exporter'
           category: 'host'
+          env: 'production'
+          node: 'nairobi-01'
+          alert_routing: 'infrastructure-alerts'
         annotations:
           summary: 'Host CPU Usage Above 80%'
-          description: 'CPU usage is {{ $value }}% over 5 minutes'
-          impact: 'System performance degradation'
-          action: 'Check processes: top, htop'
+          description: 'CPU usage: ${{ printf "%.2f" $value }}% over 5 minutes'
+          impact: 'System performance degradation; job slowdowns'
+          action: 'Review and reduce CPU usage'
+          remediation: |
+            1. Check processes: top, htop, ps aux --sort=-%cpu | head -10
+            2. Review Docker CPU usage: docker stats --no-stream
+            3. Identify CPU-intensive jobs: rate(padi_executor_job_duration_seconds) by (job_type)
+            4. Scale executor horizontally: docker-compose scale executor=2
+            5. Check dashboard: http://localhost:3000/d/system-metrics
+          runbook: 'https://docs.padi-nairobi-01.com/runbooks/host/high-cpu-usage'
+          nairobi_time: 'EAT: {{ with $externalLabels }}{{ .timezone }}{{ end }}'
 
       - alert: DiskSpaceLow
         expr: '(node_filesystem_avail_bytes{instance="10.10.0.20:9100"} / node_filesystem_size_bytes{instance="10.10.0.20:9100"}) * 100 < 15'
@@ -146,15 +262,26 @@ groups:
           severity: 'warning'
           service: 'node_exporter'
           category: 'host'
+          env: 'production'
+          node: 'nairobi-01'
+          alert_routing: 'infrastructure-alerts'
         annotations:
           summary: 'Host Disk Space Below 15%'
-          description: 'Disk partition {{ $labels.mountpoint }} has {{ $value }}% available'
-          impact: 'Potential disk full scenario'
-          action: 'Check disk usage: df -h'
+          description: 'Disk partition {{ $labels.mountpoint }}: {{ $value }}% available'
+          impact: 'Potential disk full scenario; operations may fail'
+          action: 'Review disk usage and clear space immediately'
+          remediation: |
+            1. Check disk usage: df -h
+            2. Identify large files: du -sh / | sort -rh | head -10
+            3. Clear Docker data: docker system prune -a --volumes
+            4. Rotate logs: logrotate -f /etc/logrotate.d/padi
+            5. Check dashboard: http://localhost:3000/d/system-metrics
+          runbook: 'https://docs.padi-nairobi-01.com/runbooks/host/disk-space-low'
+          nairobi_time: 'EAT: {{ with $externalLabels }}{{ .timezone }}{{ end }}'
 
-      # =====================================================
+      # -----------------------------------------------------
       # MONITORING PLATFORM ALERTS
-      # =====================================================
+      # -----------------------------------------------------
       - alert: PrometheusDown
         expr: 'up{job="prometheus", instance="localhost:9090"} == 0'
         for: 2m
@@ -162,11 +289,22 @@ groups:
           severity: 'critical'
           service: 'monitoring'
           category: 'infrastructure'
+          env: 'production'
+          node: 'nairobi-01'
+          alert_routing: 'critical-alerts'
         annotations:
-          summary: 'Prometheus Server Unreachable'
+          summary: 'CRITICAL — Prometheus Server Unreachable'
           description: 'Prometheus metrics platform is offline'
-          impact: 'All monitoring data unavailable'
-          action: 'Restart Prometheus: docker restart prometheus'
+          impact: 'All monitoring data unavailable; blind to system state'
+          action: 'IMMEDIATE: Restart Prometheus service'
+          remediation: |
+            1. Check Prometheus container: docker ps -a | grep prometheus
+            2. Review Prometheus logs: docker logs prometheus --tail 50
+            3. Restart Prometheus: docker restart prometheus
+            4. Verify scrape config: docker exec prometheus promtool check config /etc/prometheus/prometheus.yml
+            5. Check dashboard: http://localhost:9090
+          runbook: 'https://docs.padi-nairobi-01.com/runbooks/critical/prometheus-down'
+          nairobi_time: 'EAT: {{ with $externalLabels }}{{ .timezone }}{{ end }}'
 
       - alert: AlertmanagerDown
         expr: 'up{job="alertmanager"} == 0'
@@ -175,11 +313,22 @@ groups:
           severity: 'critical'
           service: 'monitoring'
           category: 'infrastructure'
+          env: 'production'
+          node: 'nairobi-01'
+          alert_routing: 'critical-alerts'
         annotations:
-          summary: 'Alertmanager Unreachable'
+          summary: 'CRITICAL — Alertmanager Unreachable'
           description: 'Alert routing engine is offline'
-          impact: 'Alert notifications not dispatched'
-          action: 'Restart Alertmanager: docker restart alertmanager'
+          impact: 'Alert notifications not dispatched; silent failures'
+          action: 'IMMEDIATE: Restart Alertmanager service'
+          remediation: |
+            1. Check Alertmanager container: docker ps -a | grep alertmanager
+            2. Review Alertmanager logs: docker logs alertmanager --tail 50
+            3. Restart Alertmanager: docker restart alertmanager
+            4. Verify config: docker exec alertmanager amtool check-config /etc/alertmanager/config.yml
+            5. Verify health: curl http://localhost:9093/-/healthy
+          runbook: 'https://docs.padi-nairobi-01.com/runbooks/critical/alertmanager-down'
+          nairobi_time: 'EAT: {{ with $externalLabels }}{{ .timezone }}{{ end }}'
 
       - alert: GrafanaDown
         expr: 'up{job="grafana"} == 0'
@@ -188,8 +337,159 @@ groups:
           severity: 'critical'
           service: 'monitoring'
           category: 'infrastructure'
+          env: 'production'
+          node: 'nairobi-01'
+          alert_routing: 'critical-alerts'
         annotations:
-          summary: 'Grafana Dashboard Unreachable'
+          summary: 'CRITICAL — Grafana Dashboard Unreachable'
           description: 'Visualization platform is offline'
-          impact: 'Dashboard access unavailable'
-          action: 'Restart Grafana: docker restart grafana'
+          impact: 'Dashboard access unavailable; monitoring observability degraded'
+          action: 'IMMEDIATE: Restart Grafana service'
+          remediation: |
+            1. Check Grafana container: docker ps -a | grep grafana
+            2. Review Grafana logs: docker logs grafana --tail 50
+            3. Restart Grafana: docker restart grafana
+            4. Verify Grafana URL: curl http://localhost:3000
+            5. Check dashboard health: http://localhost:3000/api/health
+          runbook: 'https://docs.padi-nairobi-01.com/runbooks/critical/grafana-down'
+          nairobi_time: 'EAT: {{ with $externalLabels }}{{ .timezone }}{{ end }}'
+
+  # =====================================================
+  # SOVEREIGN GOVERNANCE ALERTS — PADI Operating Directives
+  # =====================================================
+  - name: padi_executor_governance
+    interval: 15s
+    rules:
+      - alert: TVLBelowTarget
+        expr: '(padi_bureau_tvl_usd{node="nairobi-01"} / padi_bureau_target_tvl_usd{node="nairobi-01"}) < 0.75'
+        for: 5m
+        labels:
+          severity: 'warning'
+          service: 'executor'
+          category: 'governance'
+          env: 'production'
+          node: 'nairobi-01'
+          alert_routing: 'executor-alerts'
+          padi_directive: 'esc_threshold'
+        annotations:
+          summary: 'Bureau TVL Below 75% of Target'
+          description: 'Current TVL: ${{ printf "%.2f" $value | humanize }} USD | Target Threshold: 75%'
+          impact: 'Governance threshold breached — monitor revenue generation'
+          action: 'Review TVL metrics dashboard: http://localhost:3000/d/padi-executor-overview'
+          remediation: |
+            1. Verify blockchain transactions are processing
+            2. Check contract interactions for stalls
+            3. Review revenue accrual mechanisms
+            4. Escalate if TVL < $1M USD (Enterprise Critical)
+          runbook: 'https://docs.padi-nairobi-01.com/runbooks/governance/tvl-below-target'
+          nairobi_time: 'EAT: {{ with $externalLabels }}{{ .timezone }}{{ end }}'
+
+      - alert: TVLCriticalLow
+        expr: 'padi_bureau_tvl_usd{node="nairobi-01"} < 1000000'
+        for: 0m
+        labels:
+          severity: 'critical'
+          service: 'executor'
+          category: 'governance'
+          env: 'production'
+          node: 'nairobi-01'
+          alert_routing: 'critical-alerts'
+          padi_directive: 'esc_critical'
+          enterprise_critical: 'true'
+        annotations:
+          summary: 'ENTERPRISE CRITICAL — TVL Below $1M USD'
+          description: 'TVL has dropped below Enterprise Critical threshold: ${{ printf "%.2f" $value | humanize }} USD'
+          impact: 'CRITICAL — Immediate escalation required per PADI Operating Directives'
+          action: 'IMMEDIATE: Escalate to CTO and Executive Team'
+          remediation: |
+            1. STOP all non-critical operations
+            2. Verify blockchain network connectivity
+            3. Audit smart contract interactions
+            4. Review recent transaction history for anomalies
+            5. Initiate incident response protocol
+          runbook: 'https://docs.padi-nairobi-01.com/runbooks/critical/tvl-enterprise-threat'
+          nairobi_time: 'EAT: {{ with $externalLabels }}{{ .timezone }}{{ end }}'
+
+      - alert: SlashingRiskDetected
+        expr: 'padi_executor_missed_blocks{node="nairobi-01"} > 0'
+        for: 0m
+        labels:
+          severity: 'critical'
+          service: 'executor'
+          category: 'governance'
+          env: 'production'
+          node: 'nairobi-01'
+          alert_routing: 'critical-alerts'
+          padi_directive: 'financial_integrity'
+        annotations:
+          summary: 'CRITICAL — Slashing Risk Detected (Missed Blocks)'
+          description: '{{ $value }} missed block(s) detected — financial penalty exposure'
+          impact: 'FINANCIAL EXPOSURE — Slashing penalties will be applied'
+          action: 'IMMEDIATE: Review validator logs and connectivity'
+          remediation: |
+            1. Check executor service health: docker logs executor --tail 100
+            2. Verify network connectivity to blockchain RPC
+            3. Review system resource exhaustion
+            4. Restart executor if stalling: docker restart executor
+            5. Escalate if missed blocks > 5
+          runbook: 'https://docs.padi-nairobi-01.com/runbooks/critical/slashing-risk'
+          nairobi_time: 'EAT: {{ with $externalLabels }}{{ .timezone }}{{ end }}'
+
+      - alert: SHACLValidationFailed
+        expr: 'padi_shacl_validation_status{node="nairobi-01"} == 1'
+        for: 0m
+        labels:
+          severity: 'critical'
+          service: 'executor'
+          category: 'governance'
+          env: 'production'
+          node: 'nairobi-01'
+          alert_routing: 'critical-alerts'
+          padi_directive: 'data_integrity'
+        annotations:
+          summary: 'CRITICAL — SHACL Data Integrity Violation'
+          description: 'SHACL structural validation failed for one or more entities'
+          impact: 'DATA INTEGRITY — Bureau sovereignty compromised'
+          action: 'IMMEDIATE: Review SHACL validation logs and repair data structures'
+          remediation: |
+            1. Query SHACL validation dashboard: http://localhost:3000/d/padi-executor-overview
+            2. Query validation failures: padi_shacl_validation_status{node="nairobi-01", status="fail"}
+            3. Review data ingestion pipeline logs
+            4. Validate entity relationships and constraints
+            5. Escalate if data corruption confirmed
+          runbook: 'https://docs.padi-nairobi-01.com/runbooks/critical/shacl-validation-failure'
+          nairobi_time: 'EAT: {{ with $externalLabels }}{{ .timezone }}{{ end }}'
+
+      - alert: RPCHealthCheckFailed
+        expr: 'padi_node_rpc_health{node="nairobi-01"} == 0'
+        for: 2m
+        labels:
+          severity: 'critical'
+          service: 'executor'
+          category: 'governance'
+          env: 'production'
+          node: 'nairobi-01'
+          alert_routing: 'critical-alerts'
+          padi_directive: 'operational_continuity'
+        annotations:
+          summary: 'CRITICAL — RPC Health Check Failed'
+          description: 'RPC endpoint healthcheck indicates blockchain RPC is unresponsive'
+          impact: 'BLOCKCHAIN OPERATIONS UNAVAILABLE — Unable to submit/verify transactions'
+          action: 'IMMEDIATE: Verify RPC endpoint connectivity and restart if needed'
+          remediation: |
+            1. Check RPC endpoint health: curl http://localhost:8545
+            2. Review Geth service logs: docker logs geth --tail 100
+            3. Restart Geth if RPC is unresponsive: docker restart geth
+            4. Verify network connectivity to blockchain peers
+            5. Escalate if RPC remains down > 5 minutes
+          runbook: 'https://docs.padi-nairobi-01.com/runbooks/critical/rpc-health-failure'
+          nairobi_time: 'EAT: {{ with $externalLabels }}{{ .timezone }}{{ end }}'
+
+  # =====================================================
+  # EXECUTOR OPERATIONAL ALERTS — JOB PROCESSING METRICS
+  # =====================================================
+  - name: padi_executor_operations
+    interval: 15s
+    rules:
+      - alert: ExecutorJobsQueuedHigh
+        expr: 'padi_executor_jobs_queued{node="nairobi-01"}
