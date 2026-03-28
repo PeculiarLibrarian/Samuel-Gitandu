@@ -1,5 +1,5 @@
 # =====================================================
-# Docker Compose — PADI Nairobi-01 Production v3.0
+# Docker Compose — PADI Nairobi-01 Production v3.0-FINAL
 # =====================================================
 #
 # Sovereign Perfection — Production Observatory v3.0
@@ -14,14 +14,16 @@
 #   ✅ alertmanager — Alert Routing Engine
 #   ✅ grafana — Visualization Dashboard
 #
-# ENHANCEMENTS IN v3.0:
+# ENHANCEMENTS IN v3.0-FINAL:
 #   ✅ Updated volume mounts for alertmanager config (v2.2-PROD)
 #   ✅ Updated volume mount for prometheus rules (alert-rules.yml)
-#   ✅ Added alertmanager .env file reference
-#   ✅ Alchemy Integration: Added RPC endpoint configuration
+#   ✅ Added alertmanager .env file reference (production-ready)
+#   ✅ Alchemy Integration: Configured from environment variables
 #   ✅ Restart policy: unless-stopped
+#   ✅ Health checks for all services
+#   ✅ Logging configuration for production monitoring
 #
-# Version: 3.0-PROD (Alchemy Integration)
+# Version: 3.0-FINAL-PROD
 # Node: Nairobi-01
 # Environment: Production
 # File: docker-compose.yml
@@ -39,17 +41,19 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
+    env_file:
+      - ./monitoring/alertmanager/.env
     environment:
       - NODE_NAME=nairobi-01
       - ENVIRONMENT=production
       - LOG_LEVEL=info
-      # ✅ Alchemy Configuration
+      # ✅ Alchemy Configuration (from .env file)
       - ALCHEMY_ENABLED=true
-      - ALCHEMY_ENDPOINT=https://eth-mainnet.g.alchemy.com/v2/YOUR_API_KEY
-      - ALCHEMY_NETWORK=mainnet
-      - ALCHEMY_CHAIN_ID=1
-      - ALCHEMY_APP_NAME=peculiars-first-app
-      - ALCHEMY_RPC_TIMEOUT=30000
+      - ALCHEMY_ENDPOINT=${ALCHEMY_ENDPOINT}
+      - ALCHEMY_NETWORK=${ALCHEMY_NETWORK}
+      - ALCHEMY_CHAIN_ID=${ALCHEMY_CHAIN_ID}
+      - ALCHEMY_APP_NAME=${ALCHEMY_APP_NAME}
+      - ALCHEMY_RPC_TIMEOUT=${ALCHEMY_RPC_TIMEOUT}
     volumes:
       - ./executor/data:/data
       - ./executor/config:/config:ro
@@ -60,10 +64,17 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     labels:
       - "com.padi.service=executor"
       - "com.padi.node=nairobi-01"
       - "com.padi.alchemy.enabled=true"
+      - "com.padi.production=true"
 
   # =====================================================
   # GETH (ETHEREUM BLOCKCHAIN NODE)
@@ -83,12 +94,12 @@ services:
       - ./geth/config:/config:ro
     command: >
       --http
-      --http.api eth,net,web3,admin
+      --http.api eth,net,web3,admin,debug
       --http.addr 0.0.0.0
       --http.port 8545
       --http.corsdomain "*"
       --ws
-      --ws.api eth,net,web3,admin
+      --ws.api eth,net,web3,admin,debug
       --ws.addr 0.0.0.0
       --ws.port 8546
       --ws.origins "*"
@@ -97,6 +108,9 @@ services:
       --metrics.port 6060
       --nodiscover
       --maxpeers 50
+      --cache 4096
+      --syncmode=full
+      --gcmode=full
     environment:
       - NODE_NAME=nairobi-01
       - CHAIN_ID=1
@@ -107,9 +121,16 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     labels:
       - "com.padi.service=geth"
       - "com.padi.node=nairobi-01"
+      - "com.padi.production=true"
 
   # =====================================================
   # NODE EXPORTER (HOST METRICS)
@@ -122,6 +143,9 @@ services:
       - '--path.procfs=/host/proc'
       - '--path.sysfs=/host/sys'
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      - '--collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|mqueue|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$$'
+      - '--collector.systemd'
+      - '--collector.processes'
     ports:
       - "9100:9100"
     volumes:
@@ -130,9 +154,20 @@ services:
       - /:/rootfs:ro
     networks:
       - padi-monitoring-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9100/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "1"
     labels:
       - "com.padi.service=node_exporter"
       - "com.padi.node=nairobi-01"
+      - "com.padi.production=true"
 
   # =====================================================
   # CADVISOR (CONTAINER METRICS)
@@ -154,9 +189,20 @@ services:
       - /dev/kmsg
     networks:
       - padi-monitoring-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "1"
     labels:
       - "com.padi.service=cadvisor"
       - "com.padi.node=nairobi-01"
+      - "com.padi.production=true"
 
   # =====================================================
   # PROMETHEUS (METRICS COLLECTION)
@@ -169,16 +215,18 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
       - '--storage.tsdb.retention.time=15d'
+      - '--storage.tsdb.retention.size=20GB'
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
       - '--web.enable-lifecycle'
       - '--web.enable-admin-api'
+      - '--web.enable-remote-write-receiver'
     ports:
       - "9090:9090"
     volumes:
       # Prometheus configuration
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      # Prometheus alert rules (UPDATED v3.0 — single consolidated file)
+      # Prometheus alert rules (v3.0 — single consolidated file)
       - ./monitoring/prometheus/alerts/alert-rules.yml:/etc/prometheus/alerts/alert-rules.yml:ro
       # Prometheus TSDB data
       - ./monitoring/prometheus/data:/prometheus
@@ -189,9 +237,16 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
     labels:
       - "com.padi.service=prometheus"
       - "com.padi.node=nairobi-01"
+      - "com.padi.production=true"
 
   # =====================================================
   # ALERTMANAGER (ALERT ROUTING) — With Environment Variables
@@ -206,13 +261,14 @@ services:
       - '--cluster.listen-address=0.0.0.0:9094'
       - '--web.external-url=http://localhost:9093'
       - '--web.route-prefix=/'
+      - '--log.level=info'
     env_file:
-      - ./monitoring/alertmanager/.env  # ✅ REFERENCE .env FILE
+      - ./monitoring/alertmanager/.env
     ports:
       - "9093:9093"
       - "9094:9094"
     volumes:
-      # Alertmanager configuration (UPDATED v2.2-PROD)
+      # Alertmanager configuration (v2.2-PROD)
       - ./monitoring/alertmanager/alertmanager_config.yml:/etc/alertmanager/config.yml:ro
       # Alertmanager templates directory
       - ./monitoring/alertmanager/templates:/etc/alertmanager/templates:ro
@@ -225,9 +281,16 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
     labels:
       - "com.padi.service=alertmanager"
       - "com.padi.node=nairobi-01"
+      - "com.padi.production=true"
 
   # =====================================================
   # GRAFANA (VISUALIZATION DASHBOARD)
@@ -238,11 +301,16 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+    env_file:
+      - ./monitoring/alertmanager/.env
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_INSTALL_PLUGINS=grafana-piechart-panel
       - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_SECURITY_DISABLE_GRAVATAR=false
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_LOG_LEVEL=info
     volumes:
       - ./monitoring/grafana/data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
@@ -254,9 +322,16 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
     labels:
       - "com.padi.service=grafana"
       - "com.padi.node=nairobi-01"
+      - "com.padi.production=true"
 
 # =====================================================
 # NETWORKS
@@ -265,13 +340,22 @@ networks:
   padi-monitoring-net:
     driver: bridge
     name: padi-monitoring-net
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.10.0.0/16
 
 # =====================================================
 # VOLUMES (optional — use bind mounts as defined above)
 # =====================================================
 volumes:
   executor-data:
+    driver: local
   geth-data:
+    driver: local
   prometheus-data:
+    driver: local
   alertmanager-data:
+    driver: local
   grafana-data:
+    driver: local
